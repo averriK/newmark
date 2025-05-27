@@ -1,20 +1,20 @@
-rm(list=ls())
+# nolint start
+rm(list = ls())
 library(data.table)
-source("R/Dn_AM88.R")
-source("R/Dn_BM17.R")
-source("R/Dn_BM19.R")
-source("R/Dn_BT07.R")
-source("R/Dn_JB07.R")
-source("R/Dn_SR08.R")
-source("R/Dn_YG91.R")
+source("R/Dn_model.R")
 
 
+Vs30_TARGET <- 300
+TR_TARGET <- 2475
+
+UHSTable <- readRDS("data/UHSTable.Rds")
+#test
+UHS <- UHSTable[TR==TR_TARGET &   p=="mean" & Vref == 760 & Vs30 ==Vs30_TARGET,.(Sa,Tn)]
+Ts <- 0.103
+ky <- 0.23
+Dn_model(uhs=UHS, ky=ky, Ts=Ts, Mw=7.5)
 
 
-Dn_AM88(PGA=0.7,ky=0.23)
-Dn_BT07(Sa=0.931, Mw=8.5,ky=0.23)
-Dn_BM17(Tn=0.06, Sa=0.931, Mw=8.5,ky=0.23) # Subduction
-Dn_BM19(PGA=0.7, Tn=0.06, Sa=0.931, Mw=8.5,ky=0.23) # Shallow Crustal
-Dn_JB07(PGA=0.7,ky=0.23)
-Dn_SR08(PGA=0.7,ky=0.23)
-Dn_YG91(PGA=0.7,ky=0.23)
+# Robust estimate
+UHS <- UHSTable[TR==TR_TARGET &    Vref == 760 & Vs30 ==Vs30_TARGET,.(Sa,Tn,p)]
+
