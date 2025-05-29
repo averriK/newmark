@@ -23,7 +23,6 @@ sdLnSa <- sdQ(
   p = p,
   q = q
 )
-sdLnSa
 # Sample Sa
 
 Sa <- rnormQ(
@@ -51,7 +50,7 @@ PGA <- rnormQ(
   n = length(Sa)
 ) |> exp()
 
-PGV <- (PGA^1.0529) * exp(0.1241) * 100      # convert to cm / s
+PGV <- (PGA^1.0529) * exp(0.1241) * 100      # PGV back-calculated [cm/s]
 AI <- (PGA^1.9228) * exp(2.6109)           # AI back-calculated [m/s]
 
 n <-  length(Sa)
@@ -59,35 +58,68 @@ n <-  length(Sa)
 # PGA-based models
 # AM88
 AUX <- Dn_AM88(PGA = PGA, ky = ky)
-AM88Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(ID,LnD)]
+AM88Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(sample=.I,ID,Dn=exp(LnD))]
 
 #
 AUX <- Dn_YG91(PGA = PGA, ky = ky)
-YG91Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(ID,LnD)]
+YG91Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(sample=.I,ID,Dn=exp(LnD))]
 
 
 # PGA&IA-based models. ky mut be scalar
 AUX <- Dn_JB07(PGA = PGA, AI=AI,ky = ky)
-JB07Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(ID,LnD)]
+JB07Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(sample=.I,ID,Dn=exp(LnD))]
 
 #
 AUX <- Dn_SR08(PGA = PGA, AI=AI,ky = ky)
-SR08Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(ID,LnD)]
+SR08Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(sample=.I,ID,Dn=exp(LnD))]
 # 
 AUX <- Dn_BT07(Ts = Ts, Sa = Sa, Mw = Mw, ky = ky)
-BT07Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(ID,LnD)]
+BT07Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(sample=.I,ID,Dn=exp(LnD))]
 
 # BM17
 AUX <- Dn_BM17(Ts = Ts, Sa = Sa, Mw = Mw, ky = ky)
-BM17Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(ID,LnD)]
+BM17Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(sample=.I,ID,Dn=exp(LnD))]
 
 #
-AUX <- Dn_BM19(Ts = Ts, Sa = Sa, PGA=PGA,Mw = Mw, ky = ky)
-BM17Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(ID,LnD)]
+AUX <- Dn_BM19(Ts = Ts, Sa = Sa, PGA=PGA,PGV=PGV,Mw = Mw, ky = ky)
+BM19Table <- AUX[,.(ID,LnD=rnorm(n=n,mean=muLnD,sd=sdLnD)),by=.(.I)][,.(sample=.I,ID,Dn=exp(LnD))]
 
 
 
+AUX <- list(AM88Table,YG91Table,JB07Table,SR08Table,BT07Table,BM17Table,BM19Table) |>
+  rbindlist(use.names = TRUE, fill = TRUE)
+setkey(AUX, ID)                  # fast row access by ID
+
+
+# LnD <- dcast(AUX, sample ~ ID, value.var = "LnD")
+
+models <- c("YG91","AM88","JB07","BT07","SR08","BM17","BM19")
+score <- c(1,3,3,4,4,5,5)
+weights <- data.table(
+  ID = models,
+  weight = score / sum(score)
+)
+AUX <- weights[AUX, on="ID"]
+
+# Weighted quantiles
+# Build Q/uantiles
+probs <- c(0.02, 0.05, 0.10, 0.16, 0.50, 0.84, 0.90, 0.95, 0.98)
+# DnTable <- AUX[,.(p = as.character(probs),
+#                   Dn = quantile(Dn, probs = probs, na.rm = TRUE, type = 7))  # exp after quantile → avoids exponentiating 1 M numbers
+# ]
+# list(DnTable,data.table(p="mean",Dn=mean(AUX$Dn))) |> rbindlist()
+
+DnTable <- AUX[, .(
+  p = probs,
+  Dn = wtd.quantile(x= Dn,
+    weights = weight,
+    probs   = probs,
+    type    = 'quantile',
+    na.rm   = TRUE
+  )
+)]
+DnTable <- list(DnTable,data.table(p="mean",Dn=mean(AUX$Dn))) |> rbindlist()
 
 
 
-
+# Approach 2: Epistemic and Aleatory uncertainty

@@ -55,7 +55,7 @@ Dn_model <- function(PGA,Sa,Tn, ky = NULL, Ts = NULL,  Mw = NULL, PGV = NULL, AI
 #
 #  Returns  data.table(muLnD, sdLnD, ID)
 # ---------------------------------------------------------------------------
-Dn_BM17 <- function(ky, Sa, Ts, Mw=6.5) {
+Dn_BM17 <- function(ky, Sa, Ts, Mw=7.5) {
   lnSa <- log(Sa)
   
   
@@ -92,40 +92,43 @@ Dn_BM17 <- function(ky, Sa, Ts, Mw=6.5) {
 #
 #  Returns  data.table(muLnD, sdLnD, ID)
 # ---------------------------------------------------------------------------
-Dn_BM19 <- function(ky, Ts, Sa, PGA,Mw=6.5, PGV = NULL) {
+Dn_BM19 <- function(ky, Ts, Sa, PGA, Mw = 6.5, PGV) {
+  # Validate vector lengths
+  n <- length(Sa)
+  if (!(length(PGA) == n && length(PGV) == n)) {
+    stop("Sa, PGA, and PGV must have the same length.")
+  }
+  
   lnSa <- log(Sa)
-  # --- PGV estimate if not supplied ----------------------------------------
-  if (is.null(PGV)) {
-    PGV <- (PGA^1.0529) * exp(0.1241) * 100      # convert to cm / s
-  }
-  I <- (PGV<=115) # Indicator Variable
-  # --- branch: ordinary (PGV ≤ 115 cm/s) vs pulse-like ----------------------
-  if (PGV <= 115) {
-    c1 <- ifelse(Ts < 0.1, -4.551, -5.894)
-    c2 <- ifelse(Ts < 0.1, -9.690,  3.152)
-    c3 <- ifelse(Ts < 0.1,  0.000, -0.910)
-    lnPGV_term <- 0 
-    PGV_shift <- 0
-    sdLnD <- 0.74
-  } else {                              # large-PGV (velocity-pulse) branch
-    c1 <- ifelse(Ts < 0.1, -4.551, -5.894)
-    c2 <- ifelse(Ts < 0.1, -9.690,  3.152)
-    c3 <- ifelse(Ts < 0.1,  0.000, -0.910)
-    lnPGV_term <- 1.0 
-    PGV_shift <- -4.75
-    sdLnD <- 0.74
-  }
- 
-  # --- regression coefficients ---------------------------------------------
+  I <- (PGV <= 115) # Logical vector, TRUE=ordinary, FALSE=pulse
+  
+  # Coefficients (scalar, since Ts is scalar)
+  c1 <- ifelse(Ts < 0.1, -4.551, -5.894)
+  c2 <- ifelse(Ts < 0.1, -9.690, 3.152)
+  c3 <- ifelse(Ts < 0.1, 0.000, -0.910)
+  
+  lnPGV_term <- ifelse(I, 0, 1.0)
+  PGV_shift  <- ifelse(I, 0, -log(115))
+  sdLnD      <- 0.74
+  
   a0 <- c1 + 0.607 * Mw + c2 * Ts + c3 * Ts^2 -
     2.491 * log(ky) - 0.245 * log(ky)^2 +
     lnPGV_term * log(PGV) + PGV_shift
+  
   a1 <- 2.703 + 0.344 * log(ky)
   a2 <- -0.089
-  # --- median ---------------------------------------------------------------
+  
   muLnD <- a0 + a1 * lnSa + a2 * lnSa^2
-  data.table(muLnD = muLnD, sdLnD = sdLnD, ID = "BM19")
+  
+  data.table(
+    muLnD = muLnD,
+    sdLnD = sdLnD,
+    ID = "BM19"
+  )
 }
+
+
+
 
 
 
