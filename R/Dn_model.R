@@ -1,17 +1,15 @@
 # nolint start
-Dn_model <- function(uhs, ky = NULL, Ts = NULL,  Mw = NULL, PGV = NULL, AI = NULL, kymin = 0.005, kymax = 0.5, n = 30) {
+Dn_model <- function(PGA,Sa,Tn, ky = NULL, Ts = NULL,  Mw = NULL, PGV = NULL, AI = NULL, kymin = 0.005, kymax = 0.5, n = 30) {
   if (is.null(ky)) {
     ky <- seq(from = log(kymin), to = log(kymax), length.out = n) |>
       exp() |>
       round(digits = 4) |>
       unique()
   }
+
   DT <- data.table()
-  stopifnot(is.data.table(uhs))
-  stopifnot("Sa" %in% names(uhs))
-  stopifnot("Tn" %in% names(uhs))
+
   
-  PGA <- uhs[Tn == 0]$Sa
   # DECOUPLED METHODS
   DT <- list(DT,Dn_AM88(PGA = PGA, ky = ky)) |> rbindlist(use.names = TRUE, fill = TRUE)
   DT <- list(DT,Dn_JB07(PGA = PGA, ky = ky,AI=AI)) |> rbindlist(use.names = TRUE, fill = TRUE)
@@ -20,9 +18,27 @@ Dn_model <- function(uhs, ky = NULL, Ts = NULL,  Mw = NULL, PGV = NULL, AI = NUL
   
   # COUPLED METHODS
   if(!is.null(Ts)){
-    DT <- list(DT,Dn_BT07(Ts = Ts, uhs = uhs, Mw = Mw, ky = ky)) |> rbindlist(use.names = TRUE, fill = TRUE)
-    DT <- list(DT,Dn_BM17(Ts = Ts, uhs = uhs, Mw = Mw, ky = ky)) |> rbindlist(use.names = TRUE, fill = TRUE) # Subduction)
-    DT <- list(DT,Dn_BM19(Ts = Ts, uhs = uhs, Mw = Mw, ky = ky,PGV=PGV)) |> rbindlist(use.names = TRUE, fill = TRUE) # Shallow Crustal)
+    uhs <- data.table(Sa,Tn)
+    #
+    uhs <- list(uhs[Tn > 0] ,data.table(Tn = 0.01, Sa = PGA),data.table(Tn = 0.005, Sa = PGA)) |> rbindlist(use.names = TRUE, fill = TRUE)
+    uhs <- uhs[order(Tn)]
+    
+    #
+    shift <- 1.5
+    Sa <- stats::approx(x = log(uhs$Tn), y = log(uhs$Sa), xout = log(shift*Ts))$y |> exp()
+    
+    DT <- list(DT,Dn_BT07(Ts = Ts, Sa = Sa, Mw = Mw, ky = ky)) |> rbindlist(use.names = TRUE, fill = TRUE)
+    #
+    shift <- 1.5
+    Sa <- stats::approx(x = log(uhs$Tn), y = log(uhs$Sa), xout = log(shift*Ts))$y |> exp()
+    
+    DT <- list(DT,Dn_BM17(Ts = Ts, Sa = Sa, Mw = Mw, ky = ky)) |> rbindlist(use.names = TRUE, fill = TRUE) # Subduction)
+    
+    # 
+    shift <- 1.3
+    Sa <- stats::approx(x = log(uhs$Tn), y = log(uhs$Sa), xout = log(shift*Ts))$y |> exp()
+    
+    DT <- list(DT,Dn_BM19(Ts = Ts, Sa = Sa, PGA=PGA,Mw = Mw, ky = ky,PGV=PGV)) |> rbindlist(use.names = TRUE, fill = TRUE) # Shallow Crustal)
   }
 
   return(DT)
@@ -39,12 +55,8 @@ Dn_model <- function(uhs, ky = NULL, Ts = NULL,  Mw = NULL, PGV = NULL, AI = NUL
 #
 #  Returns  data.table(muLnD, sdLnD, ID)
 # ---------------------------------------------------------------------------
-Dn_BM17 <- function(ky, uhs, Ts, Mw=6.5) {
-  PGA <- uhs[Tn == 0]$Sa
-  shift <- 1.5
-  
-  uhs <- list(uhs[Tn > 0] ,data.table(Tn = 0.01, Sa = PGA),data.table(Tn = 0.005, Sa = PGA)) |> rbindlist(use.names = TRUE, fill = TRUE)
-  lnSa <- stats::approx(x = log(uhs$Tn), y = log(uhs$Sa), xout = log(shift*Ts))$y
+Dn_BM17 <- function(ky, Sa, Ts, Mw=6.5) {
+  lnSa <- log(Sa)
   
   
   # --- period-dependent constants ------------------------------------------
@@ -80,27 +92,30 @@ Dn_BM17 <- function(ky, uhs, Ts, Mw=6.5) {
 #
 #  Returns  data.table(muLnD, sdLnD, ID)
 # ---------------------------------------------------------------------------
-Dn_BM19 <- function(ky, Ts, uhs, Mw=6.5, PGV = NULL) {
-  PGA <- uhs[Tn == 0]$Sa
-  shift <- 1.3
-  uhs <- list(uhs[Tn > 0] ,data.table(Tn = 0.01, Sa = PGA),data.table(Tn = 0.005, Sa = PGA)) |> rbindlist(use.names = TRUE, fill = TRUE)
-  lnSa <- stats::approx(x = log(uhs$Tn), y = log(uhs$Sa), xout = log(shift*Ts))$y
+Dn_BM19 <- function(ky, Ts, Sa, PGA,Mw=6.5, PGV = NULL) {
+  lnSa <- log(Sa)
   # --- PGV estimate if not supplied ----------------------------------------
-  if (is.null(PGV) && !is.null(PGA) && PGA > 0) {
+  if (is.null(PGV)) {
     PGV <- (PGA^1.0529) * exp(0.1241) * 100      # convert to cm / s
   }
+  I <- (PGV<=115) # Indicator Variable
   # --- branch: ordinary (PGV ≤ 115 cm/s) vs pulse-like ----------------------
   if (PGV <= 115) {
     c1 <- ifelse(Ts < 0.1, -4.551, -5.894)
     c2 <- ifelse(Ts < 0.1, -9.690,  3.152)
     c3 <- ifelse(Ts < 0.1,  0.000, -0.910)
-    lnPGV_term <- 0; PGV_shift <- 0; sdLnD <- 0.74
+    lnPGV_term <- 0 
+    PGV_shift <- 0
+    sdLnD <- 0.74
   } else {                              # large-PGV (velocity-pulse) branch
     c1 <- ifelse(Ts < 0.1, -4.551, -5.894)
     c2 <- ifelse(Ts < 0.1, -9.690,  3.152)
     c3 <- ifelse(Ts < 0.1,  0.000, -0.910)
-    lnPGV_term <- 1.0; PGV_shift <- -4.75; sdLnD <- 0.74
+    lnPGV_term <- 1.0 
+    PGV_shift <- -4.75
+    sdLnD <- 0.74
   }
+ 
   # --- regression coefficients ---------------------------------------------
   a0 <- c1 + 0.607 * Mw + c2 * Ts + c3 * Ts^2 -
     2.491 * log(ky) - 0.245 * log(ky)^2 +
@@ -125,11 +140,9 @@ Dn_BM19 <- function(ky, Ts, uhs, Mw=6.5, PGV = NULL) {
 #
 #  Returns  data.table(muLnD, sdLnD, ID)
 # ---------------------------------------------------------------------------
-Dn_BT07 <- function(ky, uhs, Ts, Mw=6.5) {
-  PGA <- uhs[Tn == 0]$Sa
-  shift <- 1.5
-  uhs <- list(uhs[Tn > 0] ,data.table(Tn = 0.01, Sa = PGA),data.table(Tn = 0.005, Sa = PGA)) |> rbindlist(use.names = TRUE, fill = TRUE)
-  lnSa <- stats::approx(x = log(uhs$Tn), y = log(uhs$Sa), xout = log(shift*Ts))$y
+Dn_BT07 <- function(ky, Sa,Ts, Mw=6.5) {
+  
+  lnSa <- log(Sa)
   lnky  <- log(ky)
   muLnD <- -1.10 - 2.83 * lnky - 0.333 * lnky^2 + 0.566 * lnky * lnSa + 3.04 * lnSa - 0.244 * lnSa^2 +  0.278 * (Mw - 7)
   sdLnD <- 0.66
@@ -147,7 +160,7 @@ Dn_BT07 <- function(ky, uhs, Ts, Mw=6.5) {
 #  Returns  data.table(muLnD, sdLnD, ID)
 # ---------------------------------------------------------------------------
 Dn_JB07 <- function(PGA, ky, AI = NULL) {
-  if (is.null(AI) && PGA > 0) {
+  if (is.null(AI)) {
     AI <- (PGA^1.9228) * exp(2.6109)           # AI back-calculated [m/s]
   }
   r        <- ky / PGA
@@ -171,7 +184,7 @@ Dn_JB07 <- function(PGA, ky, AI = NULL) {
 #  Returns  data.table(muLnD, sdLnD, ID)
 # ---------------------------------------------------------------------------
 Dn_SR08 <- function(PGA, ky, AI = NULL) {
-  if (is.null(AI) && PGA > 0) {
+  if (is.null(AI)) {
     AI <- (PGA^1.9228) * exp(2.6109)           # AI back-calculated [m/s]
   }
   r      <- ky / PGA

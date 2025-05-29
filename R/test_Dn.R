@@ -12,9 +12,12 @@ UHSTable <- readRDS("data/UHSTable.Rds")
 UHS <- UHSTable[TR==TR_TARGET &   p=="mean" & Vref == 760 & Vs30 ==Vs30_TARGET,.(Sa,Tn)]
 Ts <- 0.103
 ky <- 0.23
-Dn_model(uhs=UHS, ky=ky, Ts=Ts, Mw=7.5)
+Sa <- UHS$Sa
+Tn <- UHS$Tn
+PGA <- UHS[Tn == 0]$Sa
+Dn_model(Sa=Sa,Tn=Tn,PGA=PGA, ky=ky, Ts=Ts, Mw=7.5)
 
 
 # Robust estimate
-UHS <- UHSTable[TR==TR_TARGET &    Vref == 760 & Vs30 ==Vs30_TARGET,.(Sa,Tn,p)]
+# UHS <- UHSTable[TR==TR_TARGET &    Vref == 760 & Vs30 ==Vs30_TARGET,.(Sa,Tn,p)]
 
