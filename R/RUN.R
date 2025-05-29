@@ -1,10 +1,10 @@
-
+rm(list=ls())
 library(sdQ)
 library(data.table)
+library(Hmisc)
 source("R/Dn_model.R")
 ky <- 0.23
 Ts <- 0.103
-Td <- 1.5*Ts
 Mw <- 7.8
 Vs30_TARGET <- 300
 TR_TARGET <- 2475
@@ -13,7 +13,7 @@ UHSTable <- readRDS("data/UHSTable.Rds")
 UHS <- UHSTable[TR==TR_TARGET &   Vref == 760 & Vs30 ==Vs30_TARGET,.(Sa,Tn,p)]
 PGATable <- UHS[Tn == 0]
 UHS[Tn==0, Tn := 0.01,by=.(p)]
-SaTable <- UHS[,.(Sa=stats::approx(x = log(Tn), y = log(Sa), xout = log(Td))$y |> exp()),by=.(p)]
+SaTable <- UHS[,.(Sa=stats::approx(x = log(Tn), y = log(Sa), xout = log(1.3*Ts))$y |> exp()),by=.(p)]
 # 
 muLnSa <- log(SaTable[p=="mean"]$Sa)
 p <-  as.numeric(SaTable[p!="mean"]$p)
