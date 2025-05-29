@@ -1,47 +1,12 @@
 # nolint start
-Dn_model <- function(PGA,Sa,Tn, ky = NULL, Ts = NULL,  Mw = NULL, PGV = NULL, AI = NULL, kymin = 0.005, kymax = 0.5, n = 30) {
-  if (is.null(ky)) {
-    ky <- seq(from = log(kymin), to = log(kymax), length.out = n) |>
-      exp() |>
-      round(digits = 4) |>
-      unique()
-  }
 
-  DT <- data.table()
-
-  
-  # DECOUPLED METHODS
-  DT <- list(DT,Dn_AM88(PGA = PGA, ky = ky)) |> rbindlist(use.names = TRUE, fill = TRUE)
-  DT <- list(DT,Dn_JB07(PGA = PGA, ky = ky,AI=AI)) |> rbindlist(use.names = TRUE, fill = TRUE)
-  DT <- list(DT, Dn_SR08(PGA = PGA, ky = ky,AI=AI)) |> rbindlist(use.names = TRUE, fill = TRUE)
-  DT <- list(DT,Dn_YG91(PGA = PGA, ky = ky)) |> rbindlist(use.names = TRUE, fill = TRUE)
-  
-  # COUPLED METHODS
-  if(!is.null(Ts)){
-    uhs <- data.table(Sa,Tn)
-    #
-    uhs <- list(uhs[Tn > 0] ,data.table(Tn = 0.01, Sa = PGA),data.table(Tn = 0.005, Sa = PGA)) |> rbindlist(use.names = TRUE, fill = TRUE)
-    uhs <- uhs[order(Tn)]
-    
-    #
-    shift <- 1.5
-    Sa <- stats::approx(x = log(uhs$Tn), y = log(uhs$Sa), xout = log(shift*Ts))$y |> exp()
-    
-    DT <- list(DT,Dn_BT07(Ts = Ts, Sa = Sa, Mw = Mw, ky = ky)) |> rbindlist(use.names = TRUE, fill = TRUE)
-    #
-    shift <- 1.5
-    Sa <- stats::approx(x = log(uhs$Tn), y = log(uhs$Sa), xout = log(shift*Ts))$y |> exp()
-    
-    DT <- list(DT,Dn_BM17(Ts = Ts, Sa = Sa, Mw = Mw, ky = ky)) |> rbindlist(use.names = TRUE, fill = TRUE) # Subduction)
-    
-    # 
-    shift <- 1.3
-    Sa <- stats::approx(x = log(uhs$Tn), y = log(uhs$Sa), xout = log(shift*Ts))$y |> exp()
-    
-    DT <- list(DT,Dn_BM19(Ts = Ts, Sa = Sa, PGA=PGA,Mw = Mw, ky = ky,PGV=PGV)) |> rbindlist(use.names = TRUE, fill = TRUE) # Shallow Crustal)
-  }
-
-  return(DT)
+Dn_model <- function(.fun, ..., n=1) {
+  DnModel <- .fun(...)
+  stopifnot("muLnD" %in% names(DnModel) & 
+              "sdLnD" %in% names(DnModel) & 
+              "ID" %in% names(DnModel))
+  DnSample <- DnModel[, .(ID, LnD = rnorm(n = n, mean = muLnD, sd = sdLnD)), by = .(.I)][, .(sample = .I, ID, Dn = exp(LnD))]
+  return(DnSample)
 }
 
 # ---------------------------------------------------------------------------
@@ -126,11 +91,6 @@ Dn_BM19 <- function(ky, Ts, Sa, PGA, Mw = 6.5, PGV) {
     ID = "BM19"
   )
 }
-
-
-
-
-
 
 # ---------------------------------------------------------------------------
 #  Bray & Travasarou (2007) flexible sliding-block model

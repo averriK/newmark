@@ -1,3 +1,5 @@
+# R/helpers.R
+
 sample_Sa <- function(UHS, Td, n) {
     if (Td %in% UHS$Tn) {
         # Select
@@ -19,8 +21,4 @@ sample_Sa <- function(UHS, Td, n) {
 }
 
 
-Dn_model <- function(.fun, ..., n) {
-    DnModel <- .fun(...)
-    DnSample <- DnModel[, .(ID, LnD = rnorm(n = n, mean = muLnD, sd = sdLnD)), by = .(.I)][, .(sample = .I, ID, Dn = exp(LnD))]
-    return(DnSample)
-}
+
