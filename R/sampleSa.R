@@ -5,7 +5,6 @@
 #' @param n   integer – number of samples.
 #' @return list(SaTable, muLnSa, sdLnSa, Sa)
 #' @import data.table
-#' @importFrom sdQ rnormQ sdQ
 #' @export
 sampleSa <- function(UHS, Td, n) {
     if (Td %in% UHS$Tn) {

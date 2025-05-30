@@ -7,17 +7,13 @@ Authors@R:
            family = "Verri Kozlowski",
            email = "averri@fi.uba.ar",
            role = c("aut", "cre"))
-Description: Propagates epistemic uncertainty in uniform-hazard spectral
-  ordinates Sa(Tn) with the aleatory variability of empirical ground-failure
-  models via weighted Monte Carlo convolution.  The key builders are:
-  (1) fitDn() – combines multiple sliding-block Newmark displacement models
-  (AM88, YG91, JB07, BT07, SR08, BM17, BM19) with sampled Sa, PGA, PGV and
-  Arias intensity; (2) fitSaF() – convolves Sa(Tn) with the non-linear site
-  factor F(ST17) of Stewart and Seyhan (2017) for a given Vs30; and
-  (3) sampleSa() – draws Sa realisations at arbitrary periods consistent
-  with hazard-curve quantiles using the sdQ method.  All functions return
-  data.table objects for seamless downstream analysis and require only base R
-  plus data.table, Hmisc and sdQ.
+Description: Propagates uncertainty from uniform-hazard spectral
+  accelerations through empirical sliding-block and non-linear site-factor
+  models using weighted Monte-Carlo sampling.  Builder sampleSa() draws
+  Sa(Tn) realisations from hazard-curve quantiles; fitSaF() convolves those
+  values with the Stewart & Seyhan (2017) site factor; fitDn() combines
+  multiple Newmark displacement models to deliver scenario-specific
+  quantiles.  Outputs are returned as data.table objects.
 License: file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -26,8 +22,8 @@ Depends: R (>= 4.2)
 Imports:
     data.table,
     Hmisc,
-    sdQ,
-    stats
+    stats,
+    minpack.lm
 Suggests:
     testthat (>= 3.0.0),
     knitr,

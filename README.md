@@ -114,10 +114,7 @@ All helpers return **data.table** objects for seamless downstream analysis.
 
 ## Citation
 
-If you use **newmark** in academic work, please cite the primary reference
-of each empirical model you rely on (Ambraseys & Menu 1988, Yegian et al. 1991,
-Jibson 2007, Bray & Travasarou 2007, Saygili & Rathje 2008,
-Bray & Macedo 2017/2019, Stewart & Seyhan 2017) and this package.
+If you use **newmark** in academic work, please cite this package.
 
 ---
 

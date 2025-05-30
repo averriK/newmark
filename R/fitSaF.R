@@ -5,7 +5,7 @@
 # nolint start
 #' Quantiles of SaF = Sa × F(ST17) at period Tn
 #'
-#' @param UHS  data.table – uniform-hazard spectrum (Tn, Sa, p).
+#' @param uhs  data.table – uniform-hazard spectrum (Tn, Sa, p).
 #' @param vs30 numeric scalar – site Vs30 (m/s).
 #' @param Tn   numeric scalar – oscillator period (s).
 #' @param NS   integer ≥ 1 – Monte-Carlo samples (default 30).
@@ -13,13 +13,14 @@
 #'
 #' @return data.table(p, SaF) with probability labels plus row p == "mean".
 #' @export
-fitSaF <- function(UHS,
+fitSaF <- function(uhs,
                    vs30,
                    Tn,
                    NS   = 30,
                    vref = 760) {
   
-  ## ---------- 1. sample Sa(Tn) and PGA ----------------------------------
+  UHS <- copy(uhs)
+  UHS[Tn == 0, Tn := 0.01, by = .(p)]
   Sa_Tn <- sampleSa(UHS, Td = Tn,   n = NS)$Sa
   PGA   <- sampleSa(UHS, Td = 0.01, n = NS)$Sa  # 0.01 s ≈ PGA
   

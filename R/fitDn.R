@@ -11,7 +11,7 @@ NULL
 # ---------------------------------------------------------------------------
 #' Weighted Newmark displacement quantiles from multiple models
 #'
-#' @param UHS   data.table – uniform-hazard spectrum (Tn, Sa, p).
+#' @param uhs   data.table – uniform-hazard spectrum (Tn, Sa, p).
 #' @param ky    numeric vector of yield accelerations (g).
 #' @param Ts    numeric scalar – fundamental period of the sliding mass (s).
 #' @param Mw    numeric scalar – scenario moment magnitude (default 6.5).
@@ -22,9 +22,7 @@ NULL
 #' @return data.table with p (probability label) and weighted Dn (cm).
 #' @export
 fitDn <- function(
-    UHS,
-    ky,
-    Ts,
+    uhs,    ky,    Ts,
     Mw = 6.5,
     NS = 30,
     models = c("YG91", "AM88", "JB07", "BT07", "SR08", "BM17", "BM19"),
@@ -36,6 +34,7 @@ fitDn <- function(
   weights <- data.table(ID = models, weight = score / sum(score))
   
   ## ---------- 2. pre-process UHS -----------------------------------------
+  UHS <- copy(uhs)
   UHS[Tn == 0, Tn := 0.01, by = .(p)]     # avoid log(0)
   
   ## ---------- 3. sample Sa at required periods ---------------------------

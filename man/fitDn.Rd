@@ -5,7 +5,7 @@
 \title{Weighted Newmark displacement quantiles from multiple models}
 \usage{
 fitDn(
-  UHS,
+  uhs,
   ky,
   Ts,
   Mw = 6.5,
@@ -16,7 +16,7 @@ fitDn(
 )
 }
 \arguments{
-\item{UHS}{data.table – uniform-hazard spectrum (Tn, Sa, p).}
+\item{uhs}{data.table – uniform-hazard spectrum (Tn, Sa, p).}
 
 \item{ky}{numeric vector of yield accelerations (g).}
 

@@ -4,10 +4,10 @@
 \alias{fitSaF}
 \title{Quantiles of SaF = Sa × F(ST17) at period Tn}
 \usage{
-fitSaF(UHS, vs30, Tn, NS = 30, vref = 760)
+fitSaF(uhs, vs30, Tn, NS = 30, vref = 760)
 }
 \arguments{
-\item{UHS}{data.table – uniform-hazard spectrum (Tn, Sa, p).}
+\item{uhs}{data.table – uniform-hazard spectrum (Tn, Sa, p).}
 
 \item{vs30}{numeric scalar – site Vs30 (m/s).}
 
