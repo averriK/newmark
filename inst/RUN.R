@@ -4,28 +4,22 @@ library(data.table)
 # library(newmark)     # ← your package
 devtools::load_all()  # load package in development mode
 ## ---- LOAD & FILTER UHS ----------------------------------------------------
+Vs30_TARGET <- c(300, 475)    # ← your target array
+TR_TARGET <- c(2475,475)
+## ---- 1  Load UHSTable (no filtering on TR now)  -------------
 UHSTable <- readRDS("inst/UHSTable.Rds")
 
-UHS <- UHSTable[
-  TR %in% c(2475, 475) &  # return periods (years)
-    Vref == 760 &
-    Vs30 == 760,
-  .(TR,Sa, Tn, p)   # keep only what fitDn() needs
+UHS <- UHSTable[TR %in%  TR_TARGET&  Vref == 760 &    Vs30 == 760,              # reference-rock rows only
+  .(TR, Sa, Tn, p,Vref)
 ]
-## ---- 2  SaF quantiles for every TR  ------------------------------------
 
-SaF_all <- lapply(unique(UHS$TR), function(t) {
-    df <- fitSaF(
-      uhs  = UHS[TR == t, .(Sa, Tn, p)],   # pass only the columns fitSaF needs
-      vs30 = 800,
-      NS   = 1000,
-      vref = 760
-    )
-    df[, TR := t]                     # tag result with current TR
-    df
-  }) |> rbindlist(use.names = TRUE, fill = TRUE)
-
-setcolorder(SaF_all, c("TR", "Tn", "p", "SaF"))
+## ---- 2  SaF for every (TR, Vs30) ----------------------------
+SaF_all <- fitSaF(
+  uhs  = UHS,
+  vs30 = Vs30_TARGET,
+  NS   = 100,
+  vref = 760
+)
 
 ## ------------------------------------------------------------
 ## 2)  Build Newmark-displacement quantiles

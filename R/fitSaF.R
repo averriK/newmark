@@ -1,70 +1,95 @@
 # ============================================================
 #  Public wrapper: fitSaF()
-#  (computes SaF for all periods in the UHS)
+#  (loops over TR, vs30, and all periods in each UHS slice)
 # ============================================================
 # nolint start
-#' Quantiles of *SaF* = Sa × F(ST17) **for every period in the UHS**
+#' Quantiles of *SaF* = Sa × F(ST17) for:
+#'   • every return period in the input UHSTable
+#'   • every Vs30 value supplied (scalar or vector)
+#'   • every oscillator period stored in the UHS
 #'
-#' @param uhs  data.table – uniform-hazard spectrum (columns **Tn**, **Sa**, **p**).
-#' @param vs30 numeric scalar – site Vs30 (m/s).
-#' @param NS   integer ≥ 1 – Monte-Carlo samples per period (default 30).
-#' @param vref numeric scalar – reference Vs (default 760 m/s).
+#' @param uhs   data.table – FULL UHSTable (must contain **TR**, **Sa**, **Tn**, **p**).
+#' @param vs30  numeric scalar **or vector** – target Vs30 values (m/s).
+#' @param NS    integer ≥ 1 – Monte-Carlo samples per (TR, Vs30, Tn) combo (default 30).
+#' @param vref  numeric scalar – reference Vs (default 760 m/s).
 #'
-#' @return data.table with columns **Tn**, **p**, **SaF**;  
-#'         each period block also contains a row where *p* == "mean".
+#' @return data.table with columns **TR**, **Vs30**, **Tn**, **p**, **SaF**.
 #' @export
 fitSaF <- function(uhs,
                    vs30,
                    NS   = 30,
                    vref = 760) {
   
-  ## ---------- 1  basic prep ---------------------------------------------
-  UHS <- copy(uhs)
-  UHS[Tn == 0, Tn := 0.01, by = .(p)]          # avoid log(0) in sampleSa()
-  periods <- sort(unique(UHS$Tn))
+  stopifnot(all(c("TR", "Sa", "Tn", "p") %in% names(uhs)))
   
-  ## ---------- 2  loop over periods --------------------------------------
+  TR_vals <- sort(unique(uhs$TR))
+  VS_vals <- sort(unique(vs30))
+  
+  ## ---------- main loops -------------------------------------------------
   OUT <- rbindlist(
-    lapply(periods, function(Tn) {
+    lapply(VS_vals, function(VS) {
       
-      ## 2a sample Sa(Tn) and PGA
-      Sa_Tn <- sampleSa(UHS, Td = Tn,   n = NS)$Sa
-      PGA   <- sampleSa(UHS, Td = 0.01, n = NS)$Sa   # 0.01 s ≈ PGA
-      
-      ## 2b Monte-Carlo SaF sampling
-      SaFTable <- getSaF(
-        SaF_SS17,
-        Sa   = Sa_Tn,
-        PGA  = PGA,
-        Tn   = Tn,
-        vs30 = vs30,
-        vref = vref,
-        n    = NS
+      rbindlist(
+        lapply(TR_vals, function(TR_i) {
+          
+          ## slice the UHS for this return period
+          UHS_TR <- uhs[TR == TR_i, .(Sa, Tn, p)]
+          
+          ## internal copy avoids log(0) issues
+          UHS_TR[Tn == 0, Tn := 0.01, by = .(p)]
+          
+          ## ------------ loop over periods in this UHS --------------------
+          RES_TR <- rbindlist(
+            lapply(sort(unique(UHS_TR$Tn)), function(Tn_i) {
+              
+              Sa_Tn <- sampleSa(UHS_TR, Td = Tn_i, n = NS)$Sa
+              PGA   <- sampleSa(UHS_TR, Td = 0.01, n = NS)$Sa   # 0.01 s ≈ PGA
+              
+              ## MC sampling of SaF
+              SaF_tbl <- getSaF(
+                SaF_SS17,
+                Sa   = Sa_Tn,
+                PGA  = PGA,
+                Tn   = Tn_i,
+                vs30 = VS,
+                vref = vref,
+                n    = NS
+              )
+              
+              ## empirical quantiles
+              probs <- UHS_TR[p != "mean", unique(as.numeric(p))]
+              SaF_q <- data.table(
+                p   = probs,
+                SaF = stats::quantile(SaF_tbl$SaF,
+                                      probs = probs,
+                                      names = FALSE,
+                                      type  = 7)
+              )
+              SaF_mean <- data.table(p = "mean",
+                                     SaF = mean(SaF_tbl$SaF))
+              
+              RES_per <- rbindlist(list(SaF_q, SaF_mean))
+              RES_per[, Tn := Tn_i]
+              RES_per
+            }),
+            use.names = TRUE
+          )
+          
+          RES_TR[, TR   := TR_i]
+          RES_TR[, Vs30 := VS]
+          RES_TR
+        }),
+        use.names = TRUE
       )
-      
-      ## 2c empirical quantiles
-      probs <- UHS[p != "mean", unique(as.numeric(p))]
-      SaF_q <- data.table(
-        p   = probs,
-        SaF = stats::quantile(SaFTable$SaF,
-                              probs = probs,
-                              names = FALSE,
-                              type  = 7)
-      )
-      SaF_mean <- data.table(p = "mean",
-                             SaF = mean(SaFTable$SaF))
-      
-      ## 2d attach the current period and return
-      period_res <- rbindlist(list(SaF_q, SaF_mean))
-      period_res[, Tn := Tn]
-      period_res
     }),
     use.names = TRUE
   )
   
-  setcolorder(OUT, c("Tn", "p", "SaF"))
+  setcolorder(OUT, c("TR", "Vs30", "Tn", "p", "SaF"))
   OUT[]
 }
+# nolint end
+
 
 # ============================================================
 #  Internal helper: getSaF()  (UNCHANGED)

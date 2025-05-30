@@ -2,23 +2,28 @@
 % Please edit documentation in R/fitSaF.R
 \name{fitSaF}
 \alias{fitSaF}
-\title{Quantiles of \emph{SaF} = Sa × F(ST17) \strong{for every period in the UHS}}
+\title{Quantiles of \emph{SaF} = Sa × F(ST17) for:
+• every return period in the input UHSTable
+• every Vs30 value supplied (scalar or vector)
+• every oscillator period stored in the UHS}
 \usage{
 fitSaF(uhs, vs30, NS = 30, vref = 760)
 }
 \arguments{
-\item{uhs}{data.table – uniform-hazard spectrum (columns \strong{Tn}, \strong{Sa}, \strong{p}).}
+\item{uhs}{data.table – FULL UHSTable (must contain \strong{TR}, \strong{Sa}, \strong{Tn}, \strong{p}).}
 
-\item{vs30}{numeric scalar – site Vs30 (m/s).}
+\item{vs30}{numeric scalar \strong{or vector} – target Vs30 values (m/s).}
 
-\item{NS}{integer ≥ 1 – Monte-Carlo samples per period (default 30).}
+\item{NS}{integer ≥ 1 – Monte-Carlo samples per (TR, Vs30, Tn) combo (default 30).}
 
 \item{vref}{numeric scalar – reference Vs (default 760 m/s).}
 }
 \value{
-data.table with columns \strong{Tn}, \strong{p}, \strong{SaF};
-each period block also contains a row where \emph{p} == "mean".
+data.table with columns \strong{TR}, \strong{Vs30}, \strong{Tn}, \strong{p}, \strong{SaF}.
 }
 \description{
-Quantiles of \emph{SaF} = Sa × F(ST17) \strong{for every period in the UHS}
+Quantiles of \emph{SaF} = Sa × F(ST17) for:
+• every return period in the input UHSTable
+• every Vs30 value supplied (scalar or vector)
+• every oscillator period stored in the UHS
 }
