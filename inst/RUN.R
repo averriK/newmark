@@ -7,33 +7,30 @@ devtools::load_all()  # load package in development mode
 UHSTable <- readRDS("inst/UHSTable.Rds")
 
 UHS <- UHSTable[
-  TR   == 2475 &
     Vref == 760 &
     Vs30 == 760,
-  .(Sa, Tn, p)   # keep only what fitDn() needs
+  .(TR,Sa, Tn, p)   # keep only what fitDn() needs
 ]
+## ---- 2  SaF quantiles for every TR  ------------------------------------
 
-## ------------------------------------------------------------
-## 1)  Build SaF(Tn) quantiles for a single Vs30
-## ------------------------------------------------------------
-
-SaF <- fitSaF(
-  uhs  = UHS,
-  vs30 = 800,
-  Tn   = 0.50,
-  NS   = 1000,
-  vref = 760
+SaF_all <- rbindlist(
+  lapply(unique(UHS$TR), function(tr) {
+    
+    df <- fitSaF(
+      uhs  = UHS[TR == tr, .(Sa, Tn, p)],   # pass only the columns fitSaF needs
+      vs30 = 800,
+      NS   = 1000,
+      vref = 760
+    )
+    
+    df[, TR := tr]                     # tag result with current TR
+    df
+  }),
+  use.names = TRUE
 )
 
-lapply(UHS$Tn |> unique(), function(Tn) {
-  fitSaF(
-    uhs  = UHS,
-    vs30 = 800,
-    Tn   = Tn,
-    NS   = 1000,
-    vref = 760
-  )
-}) |> rbindlist()
+setcolorder(SaF_all, c("TR", "Tn", "p", "SaF"))
+
 ## ------------------------------------------------------------
 ## 2)  Build Newmark-displacement quantiles
 ##     (fitDn uses the same UHS; no extra pre-processing needed)

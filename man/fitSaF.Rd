@@ -2,24 +2,23 @@
 % Please edit documentation in R/fitSaF.R
 \name{fitSaF}
 \alias{fitSaF}
-\title{Quantiles of SaF = Sa × F(ST17) at period Tn}
+\title{Quantiles of \emph{SaF} = Sa × F(ST17) \strong{for every period in the UHS}}
 \usage{
-fitSaF(uhs, vs30, Tn, NS = 30, vref = 760)
+fitSaF(uhs, vs30, NS = 30, vref = 760)
 }
 \arguments{
-\item{uhs}{data.table – uniform-hazard spectrum (Tn, Sa, p).}
+\item{uhs}{data.table – uniform-hazard spectrum (columns \strong{Tn}, \strong{Sa}, \strong{p}).}
 
 \item{vs30}{numeric scalar – site Vs30 (m/s).}
 
-\item{Tn}{numeric scalar – oscillator period (s).}
-
-\item{NS}{integer ≥ 1 – Monte-Carlo samples (default 30).}
+\item{NS}{integer ≥ 1 – Monte-Carlo samples per period (default 30).}
 
 \item{vref}{numeric scalar – reference Vs (default 760 m/s).}
 }
 \value{
-data.table(p, SaF) with probability labels plus row p == "mean".
+data.table with columns \strong{Tn}, \strong{p}, \strong{SaF};
+each period block also contains a row where \emph{p} == "mean".
 }
 \description{
-Quantiles of SaF = Sa × F(ST17) at period Tn
+Quantiles of \emph{SaF} = Sa × F(ST17) \strong{for every period in the UHS}
 }
