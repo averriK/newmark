@@ -22,7 +22,9 @@ NULL
 #' @return data.table with p (probability label) and weighted Dn (cm).
 #' @export
 fitDn <- function(
-    uhs,    ky,    Ts,
+    uhs,    
+    ky,    
+    Ts,
     Mw = 6.5,
     NS = 30,
     models = c("YG91", "AM88", "JB07", "BT07", "SR08", "BM17", "BM19"),
