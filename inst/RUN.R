@@ -7,27 +7,23 @@ devtools::load_all()  # load package in development mode
 UHSTable <- readRDS("inst/UHSTable.Rds")
 
 UHS <- UHSTable[
+  TR %in% c(2475, 475) &  # return periods (years)
     Vref == 760 &
     Vs30 == 760,
   .(TR,Sa, Tn, p)   # keep only what fitDn() needs
 ]
 ## ---- 2  SaF quantiles for every TR  ------------------------------------
 
-SaF_all <- rbindlist(
-  lapply(unique(UHS$TR), function(tr) {
-    
+SaF_all <- lapply(unique(UHS$TR), function(t) {
     df <- fitSaF(
-      uhs  = UHS[TR == tr, .(Sa, Tn, p)],   # pass only the columns fitSaF needs
+      uhs  = UHS[TR == t, .(Sa, Tn, p)],   # pass only the columns fitSaF needs
       vs30 = 800,
       NS   = 1000,
       vref = 760
     )
-    
-    df[, TR := tr]                     # tag result with current TR
+    df[, TR := t]                     # tag result with current TR
     df
-  }),
-  use.names = TRUE
-)
+  }) |> rbindlist(use.names = TRUE, fill = TRUE)
 
 setcolorder(SaF_all, c("TR", "Tn", "p", "SaF"))
 
