@@ -7,7 +7,6 @@
 #' @importFrom Hmisc wtd.quantile
 #' @importFrom stats rnorm
 #' @keywords internal
-NULL
 # ---------------------------------------------------------------------------
 #' Weighted Newmark displacement quantiles from multiple models
 #'

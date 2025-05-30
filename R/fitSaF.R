@@ -15,6 +15,7 @@
 #'
 #' @return data.table with columns **TR**, **Vs30**, **Tn**, **p**, **SaF**.
 #' @export
+
 fitSaF <- function(uhs,
                    vs30,
                    NS   = 30,
@@ -25,76 +26,62 @@ fitSaF <- function(uhs,
   TR_vals <- sort(unique(uhs$TR))
   VS_vals <- sort(unique(vs30))
   
-  ## ---------- main loops -------------------------------------------------
   OUT <- rbindlist(
     lapply(VS_vals, function(VS) {
       
       rbindlist(
         lapply(TR_vals, function(TR_i) {
           
-          ## slice the UHS for this return period
-          UHS_TR <- uhs[TR == TR_i, .(Sa, Tn, p)]
+          UHS_TR  <- uhs[TR == TR_i, .(Sa, Tn, p)]
+          UHS_mod <- copy(UHS_TR)
+          UHS_mod[Tn == 0, Tn := 0.01, by = .(p)]
           
-          ## internal copy avoids log(0) issues
-          UHS_TR[Tn == 0, Tn := 0.01, by = .(p)]
-          
-          ## ------------ loop over periods in this UHS --------------------
           RES_TR <- rbindlist(
-            lapply(sort(unique(UHS_TR$Tn)), function(Tn_i) {
+            lapply(sort(unique(UHS_TR$Tn)), function(Tn_orig) {
               
-              Sa_Tn <- sampleSa(UHS_TR, Td = Tn_i, n = NS)$Sa
-              PGA   <- sampleSa(UHS_TR, Td = 0.01, n = NS)$Sa   # 0.01 s ≈ PGA
+              Tn_eval <- if (Tn_orig == 0) 0.01 else Tn_orig
+              Sa_Tn   <- sampleSa(UHS_mod, Td = Tn_eval, n = NS)$Sa
+              pga     <- sampleSa(UHS_mod, Td = 0.01,   n = NS)$Sa
               
-              ## MC sampling of SaF
               SaF_tbl <- getSaF(
-                SaF_SS17,
+                SaF_ST17,
                 Sa   = Sa_Tn,
-                PGA  = PGA,
-                Tn   = Tn_i,
+                pga  = pga,
+                Tn   = Tn_orig,
                 vs30 = VS,
                 vref = vref,
-                n    = NS
-              )
+                n    = NS)
               
-              ## empirical quantiles
-              probs <- UHS_TR[p != "mean", unique(as.numeric(p))]
-              SaF_q <- data.table(
+              probs  <- UHS_TR[p != "mean", unique(as.numeric(p))]
+              SaF_q  <- data.table(
                 p   = probs,
                 SaF = stats::quantile(SaF_tbl$SaF,
                                       probs = probs,
                                       names = FALSE,
-                                      type  = 7)
-              )
-              SaF_mean <- data.table(p = "mean",
-                                     SaF = mean(SaF_tbl$SaF))
+                                      type  = 7))
+              SaF_mu <- data.table(p = "mean", SaF = mean(SaF_tbl$SaF))
               
-              RES_per <- rbindlist(list(SaF_q, SaF_mean))
-              RES_per[, Tn := Tn_i]
-              RES_per
+              rbindlist(list(SaF_q, SaF_mu))[, Tn := Tn_orig]
             }),
-            use.names = TRUE
-          )
+            use.names = TRUE)
           
-          RES_TR[, TR   := TR_i]
-          RES_TR[, Vs30 := VS]
+          RES_TR[, `:=`(TR = TR_i, Vs30 = VS)]
           RES_TR
         }),
-        use.names = TRUE
-      )
+        use.names = TRUE)
     }),
-    use.names = TRUE
-  )
+    use.names = TRUE)
   
-  setcolorder(OUT, c("TR", "Vs30", "Tn", "p", "SaF"))
+  OUT[, Vref := vref]
+  setcolorder(OUT, c("TR", "Vs30", "Vref", "Tn", "p", "SaF"))
   OUT[]
 }
-# nolint end
+
 
 
 # ============================================================
 #  Internal helper: getSaF()  (UNCHANGED)
 # ============================================================
-# nolint start
 #' Draw Monte-Carlo samples of SaF
 #' @keywords internal
 getSaF <- function(.fun, ..., n = 1) {
@@ -111,55 +98,40 @@ getSaF <- function(.fun, ..., n = 1) {
 # nolint end
 
 
-
-
-# ============================================================
-#  SaF model: SaF_ST17()
-#  (analogous to Dn_AM88, Dn_YG91, …)
-# ============================================================
-# nolint start
-#' Site–factor model SaF_ST17
+#' Site–factor model SaF_ST17  (canonical)
 #'
-#' Computes median (muLnSaF) and log-standard deviation (sdLnSaF) of
-#' \deqn{SaF = Sa(T_n)\;×\;F_{ST17}(T_n,\mathrm{PGA},V_{s30})}.
-#'
-#' @param Sa    numeric vector – sampled spectral acceleration at Tn (g).
-#' @param PGA   numeric vector – sampled peak ground acceleration (g).
-#' @param Tn    numeric scalar – oscillator period (s).
-#' @param vs30  numeric scalar – time-averaged Vs30 (m/s).
-#' @param vref  numeric scalar – reference Vs (default 760 m/s).
+#' @param Sa    numeric – sampled spectral acceleration at Tn (g)
+#' @param pga   numeric – sampled peak ground acceleration (g)
+#' @param Tn    numeric scalar – oscillator period (s)
+#' @param vs30  numeric scalar – time-averaged Vs30 (m/s)
+#' @param vref  numeric scalar – reference Vs30 (default 760 m/s)
 #'
 #' @return data.table(muLnSaF, sdLnSaF, ID = "ST17")
 #' @export
-SaF_SS17 <- function(Sa, PGA, Tn, vs30, vref = 760) {
+SaF_ST17 <- function(Sa, pga, Tn, vs30, vref = 760) {
   
-  stopifnot(length(Sa) == length(PGA))
+  stopifnot(length(Sa) == length(pga))
   
-  ## ---- special case: no amplification -----------------------------------
+  ## deterministic (rock) case --------------------------------------------
   if (vs30 == vref) {
     return(data.table(
-      muLnSaF = log(Sa),   # SaF = Sa
+      muLnSaF = log(Sa),
       sdLnSaF = 0,
-      ID      = "SS17"
+      ID      = "ST17"
     ))
   }
   
-  ## ---- F(Tn,PGA,Vs30) statistics (original formulae) --------------------
-  FModel <- F_SS17(PGA = PGA, Tn = Tn, vs30 = vs30, vref = vref)
-  
-  stopifnot(all(c("muLnF", "sdLnF") %in% names(FModel)),
-            !any(is.na(FModel$sdLnF)))   # sd should be valid here
-  
-  ## ---- combine with Sa --------------------------------------------------
-  muLnSaF <- log(Sa) + FModel$muLnF
-  sdLnSaF <- FModel$sdLnF
+  ## call the F-model — note the argument name **PGA**
+  F_model <- F_ST17(PGA = pga, Tn = Tn, vs30 = vs30, vref = vref)
   
   data.table(
-    muLnSaF = muLnSaF,
-    sdLnSaF = sdLnSaF,
-    ID      = "SS17"
+    muLnSaF = log(Sa) + F_model$muLnF,
+    sdLnSaF = F_model$sdLnF,
+    ID      = "ST17"
   )
 }
+
+
 
 # ============================================================
 #  Stewart & Seyhan (2017) site-factor model  —  F_ST17()
@@ -193,7 +165,7 @@ SaF_SS17 <- function(Sa, PGA, Tn, vs30, vref = 760) {
 #' amplification model for global application.” *Earthquake Spectra* **33**(1).
 #'
 #' @export
-F_SS17 <- function(PGA, Tn, vs30,
+F_ST17 <- function(PGA, Tn, vs30,
                    vref = 760,
                    Vl   = 200,
                    Vu   = 2000) {

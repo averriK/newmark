@@ -2,7 +2,7 @@
 % Please edit documentation in R/fitDn.R
 \name{fitDn}
 \alias{fitDn}
-\title{Weighted Newmark displacement quantiles from multiple models}
+\title{Seismic Newmark Displacement Library}
 \usage{
 fitDn(
   uhs,
@@ -36,5 +36,14 @@ fitDn(
 data.table with p (probability label) and weighted Dn (cm).
 }
 \description{
-Weighted Newmark displacement quantiles from multiple models
+Core routines for computing permanent Newmark displacements (Dn)
+with empirical sliding-block models and Monte-Carlo sampling.
 }
+\keyword{Newmark}
+\keyword{Weighted}
+\keyword{displacement}
+\keyword{from}
+\keyword{internal}
+\keyword{models}
+\keyword{multiple}
+\keyword{quantiles}
