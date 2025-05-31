@@ -2,11 +2,11 @@
 % Please edit documentation in R/fitSaF.R
 \name{getSaF}
 \alias{getSaF}
-\title{Draw Monte-Carlo samples of SaF}
+\title{Draw Monte-Carlo samples of SaF = Sa × F}
 \usage{
 getSaF(.fun, ..., n = 1)
 }
 \description{
-Draw Monte-Carlo samples of SaF
+Draw Monte-Carlo samples of SaF = Sa × F
 }
 \keyword{internal}

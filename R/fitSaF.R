@@ -82,20 +82,29 @@ fitSaF <- function(uhs,
 # ============================================================
 #  Internal helper: getSaF()  (UNCHANGED)
 # ============================================================
-#' Draw Monte-Carlo samples of SaF
+
+#' Draw Monte-Carlo samples of SaF = Sa × F
 #' @keywords internal
 getSaF <- function(.fun, ..., n = 1) {
   
-  SaFModel <- .fun(...)                   # identical idiom to getDn()
+  ## 1. Build the table of log-mean/σ from the supplied model
+  SaFModel <- .fun(...)   # must return muLnSaF, sdLnSaF, ID
   stopifnot(all(c("muLnSaF", "sdLnSaF", "ID") %in% names(SaFModel)))
   
-  SaFModel[
-    , .(ID, LnSaF = rnorm(n, muLnSaF, sdLnSaF)),
-    by = .I
+  ## 2. Vectorised sampling – ONE deviate per row, not n×n
+  SaFTable <- SaFModel[
+    , .(ID,
+        LnSaF = stats::rnorm(.N,      # .N = number of rows = n
+                             muLnSaF,
+                             sdLnSaF))
   ][
-    , .(sample = .I, ID, SaF = exp(LnSaF))]
+    , .(sample = .I, ID, SaF = exp(LnSaF))
+  ]
+  
+  return(SaFTable)
 }
-# nolint end
+
+
 
 
 #' Site–factor model SaF_ST17  (canonical)
