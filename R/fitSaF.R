@@ -144,6 +144,7 @@ SaF_ST17 <- function(Sa, pga, Tn, vs30, vref = 760) {
 
 # ============================================================
 #  Stewart & Seyhan (2017) site-factor model  —  F_ST17()
+#                  PATCHED 2025-05-31
 # ============================================================
 # nolint start
 #' Non-linear site amplification factor **F<sub>ST17</sub>**
@@ -174,20 +175,21 @@ SaF_ST17 <- function(Sa, pga, Tn, vs30, vref = 760) {
 #' amplification model for global application.” *Earthquake Spectra* **33**(1).
 #'
 #' @export
+
 F_ST17 <- function(PGA, Tn, vs30,
                    vref = 760,
                    Vl   = 200,
                    Vu   = 2000) {
   
-  ## ----- basic input checks ---------------------------------------------
+  ## -- basic input checks -----------------------------------------------
   ok <- length(vref) == 1L && length(vs30) == 1L && vref %in% c(760, 3000)
   stopifnot(ok)
   
-  ## ----- deterministic case (vs30 == vref) -------------------------------
+  ## -- deterministic case (vs30 == vref) --------------------------------
   if (vs30 == vref) {
     return(data.table(
       muLnF = 0,
-      sdLnF = NA,
+      sdLnF = 0,        # <<– was NA; set to 0 to keep rnorm() well-defined
       ID    = "ST17"
     ))
   }
