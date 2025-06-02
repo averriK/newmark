@@ -20,6 +20,9 @@
 #' @param BM_model "crustal"/"shallow" or "interface"/"subduction".
 #' @return data.table with p (probability label) and weighted Dn (cm).
 #' @export
+# ---------------------------------------------------------------------------
+# fitDn() - Main function
+# ---------------------------------------------------------------------------
 fitDn <- function(
     uhs,    
     ky,    
@@ -32,10 +35,10 @@ fitDn <- function(
 ) {
   
   ## ---------- 1. normalise model weights ---------------------------------
-  weights <- data.table(ID = models, weight = score / sum(score))
+  weights <- data.table::data.table(ID = models, weight = score / sum(score))
   
   ## ---------- 2. pre-process UHS -----------------------------------------
-  UHS <- copy(uhs)
+  UHS <- data.table::copy(uhs)
   UHS[Tn == 0, Tn := 0.01, by = .(p)]     # avoid log(0)
   
   ## ---------- 3. sample Sa at required periods ---------------------------
@@ -47,8 +50,8 @@ fitDn <- function(
   Sa_15_Ts  <- sampleSa(UHS, Td = 1.5 * Ts, n = NS)$Sa
   
   ## ---------- 4. Monte-Carlo sampling per model --------------------------
-  DnTable <- data.table()
-  add     <- function(dt, new) rbindlist(list(dt, new), use.names = TRUE, fill = TRUE)
+  DnTable <- data.table::data.table()
+  add     <- function(dt, new) data.table::rbindlist(list(dt, new), use.names = TRUE, fill = TRUE)
   
   if ("AM88" %in% models)
     DnTable <- add(DnTable, getDn(Dn_AM88, PGA = PGA, ky = ky, n = NS))
@@ -60,14 +63,14 @@ fitDn <- function(
     DnTable <- add(DnTable, getDn(Dn_SR08, PGA = PGA, AI = AI, ky = ky, n = NS))
   if ("BT07" %in% models)
     DnTable <- add(DnTable, getDn(Dn_BT07, Ts = Ts, Sa = Sa_10_Ts, Mw = Mw,
-                                     ky = ky, n = NS))
+                                  ky = ky, n = NS))
   if (tolower(BM_model) %in% c("interface", "subduction") && "BM17" %in% models)
     DnTable <- add(DnTable, getDn(Dn_BM17, Ts = Ts, Sa = Sa_15_Ts, Mw = Mw,
-                                     ky = ky, n = NS))
+                                  ky = ky, n = NS))
   if (tolower(BM_model) %in% c("shallow", "crustal") && "BM19" %in% models)
     DnTable <- add(DnTable, getDn(Dn_BM19, Ts = Ts, Sa = Sa_13_Ts,
-                                     PGA = PGA, PGV = PGV, Mw = Mw,
-                                     ky = ky, n = NS))
+                                  PGA = PGA, PGV = PGV, Mw = Mw,
+                                  ky = ky, n = NS))
   
   ## ---------- 5. weighted quantiles (original logic, no dummy key) -------
   AUX   <- weights[DnTable, on = "ID"]
@@ -85,8 +88,9 @@ fitDn <- function(
       na.rm   = TRUE)
   )]
   
-  Dn_mean <- data.table(p = "mean", Dn = mean(AUX$Dn))
-  rbindlist(list(Dn_q, Dn_mean))
+  # "mean" row: if all Dn are NA, this yields NaN
+  Dn_mean <- data.table::data.table(p = "mean", Dn = mean(AUX$Dn))
+  data.table::rbindlist(list(Dn_q, Dn_mean))
 }
 
 # ---------------------------------------------------------------------------
@@ -96,14 +100,14 @@ getDn <- function(.fun, ..., n = 1) {
   DnModel <- .fun(...)
   stopifnot(all(c("muLnD", "sdLnD", "ID") %in% names(DnModel)))
   
+  # If sdLnD is NA, the entire sample from that model is NA
   DnModel[
-    , .(ID, LnD = rnorm(n, muLnD, sdLnD)),
+    , .(ID, LnD = if (!is.na(sdLnD)) rnorm(n, muLnD, sdLnD) else rep(NA_real_, n)),
     by = .I
   ][
     , .(sample = .I, ID, Dn = exp(LnD))
   ]
 }
-
 
 
 #  Displacement models (empirical equations) --------------------------------

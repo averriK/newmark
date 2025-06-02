@@ -18,21 +18,26 @@ fitAllMethodsQ <- function(meanValue, p, q,nuStart = 10) {
 
 #' @keywords internal
 #' @noRd
+
 aggregateSigmaQ <- function(df, deltaD = 0.01) {
-  # param methods only
+  # Extract only param methods 1..5
   core <- df[df$method %in% c("1", "2", "3", "4", "5"), ]
   
+  # If no good data from methods 1..5, fall back to method 6 immediately
   if (nrow(core) == 0 || all(is.na(core$d))) {
-    return(list(sdValue = NA_real_, bestMethod = NA_character_))
+    fallback6 <- df[df$method == "6", ][1, ]  # method 6 row
+    return(list(sdValue = fallback6$sigma, bestMethod = "6"))
   }
   
+  # Normal aggregator logic among 1..5
   dStar <- min(core$d, na.rm = TRUE)
   inSet <- (core$d <= dStar + deltaD)
   
   chosenSSE <- core$sse[inSet]
   if (all(is.na(chosenSSE))) {
-    # e.g. all SSE are NA => no aggregator
-    return(list(sdValue = NA_real_, bestMethod = NA_character_))
+    # e.g. everything is NA => fallback to method 6
+    fallback6 <- df[df$method == "6", ][1, ]
+    return(list(sdValue = fallback6$sigma, bestMethod = "6"))
   }
   
   w <- 1 / chosenSSE
@@ -42,12 +47,19 @@ aggregateSigmaQ <- function(df, deltaD = 0.01) {
   chosenSigma <- core$sigma[inSet]
   sdValue <- sum(wNorm * chosenSigma, na.rm = TRUE)
   
-  # pick single best method by minimal d
+  # if aggregator yields NA/Inf, fallback to method 6
+  if (!is.finite(sdValue)) {
+    fallback6 <- df[df$method == "6", ][1, ]
+    return(list(sdValue = fallback6$sigma, bestMethod = "6"))
+  }
+  
+  # Otherwise, aggregator picks best method among 1..5
   bestIdx <- which.min(core$d)
   bestMethod <- core$method[bestIdx]
   
   list(sdValue = sdValue, bestMethod = bestMethod)
 }
+
 
 
 # -- Method 1: Weighted linear model -------------------------------------------
@@ -127,12 +139,16 @@ aggregateSigmaQ <- function(df, deltaD = 0.01) {
 # -- Method 4: Student-t -------------------------------------------------------
 #' @keywords internal
 #' @noRd
+# -- Method 4: Student-t -------------------------------------------------------
+#' @keywords internal
+#' @noRd
 .fitMethod4 <- function(p, q, nuStart = 10) {
   idx50 <- which.min(abs(p - 0.50))
   if (length(idx50) == 0) {
     return(templateDF("4", NA, Inf, Inf))
   }
   mu <- q[idx50]
+  
   idx02 <- which.min(abs(p - 0.02))
   idx98 <- which.min(abs(p - 0.98))
   if (idx02 == 0 || idx98 == 0) {
@@ -147,7 +163,7 @@ aggregateSigmaQ <- function(df, deltaD = 0.01) {
   w <- wgt(p)
   objFun <- function(par) {
     nu <- par[1]
-    s <- par[2]
+    s  <- par[2]
     if (nu <= 2 || s <= 0) {
       return(rep(1e10, length(q)))
     }
@@ -159,18 +175,27 @@ aggregateSigmaQ <- function(df, deltaD = 0.01) {
     # fallback
     return(templateDF("4", NA, Inf, Inf))
   }
+  
+  ## ---- PATCH: increase maxiter to 200 and optionally suppress solver warnings
+  ctrl <- minpack.lm::nls.lm.control(maxiter = 200)
+  
   fitTry <- try(
-    minpack.lm::nls.lm(
-      par = c(nuStart, s0), fn = objFun,
-      lower = c(2.001, 1e-8)
+    suppressWarnings(
+      minpack.lm::nls.lm(
+        par   = c(nuStart, s0),
+        fn    = objFun,
+        lower = c(2.001, 1e-8),
+        control = ctrl
+      )
     ),
     silent = TRUE
   )
   if (inherits(fitTry, "try-error")) {
     return(templateDF("4", NA, Inf, Inf))
   }
+  
   nuHat <- fitTry$par[1]
-  sHat <- fitTry$par[2]
+  sHat  <- fitTry$par[2]
   if (nuHat <= 2) {
     return(templateDF("4", NA, Inf, Inf))
   }
@@ -187,12 +212,12 @@ aggregateSigmaQ <- function(df, deltaD = 0.01) {
   )
 }
 
+
 # -- Method 5: Johnson SU ------------------------------------------------------
 #' @keywords internal
 #' @noRd
 # ---------------------------------------------------------------------------
 #  Method 5  – Johnson SU fit  (same logic, higher maxiter, no new arguments)
-# ---------------------------------------------------------------------------
 .fitMethod5 <- function(p, q, meanValue) {
   w <- wgt(p)
   
