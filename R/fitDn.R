@@ -31,53 +31,138 @@ fitDn <- function(
     NS = 30,
     models = c("YG91", "AM88", "JB07", "BT07", "SR08", "BM17", "BM19"),
     score  = c(1, 2, 2, 3, 3, 4, 4),
-    BM_model = "crustal"
+    BM_model = "crustal",
+    uncertainty = c("none", "Sa", "Dn", "both")  # NEW ARG
 ) {
+  uncertainty <- match.arg(uncertainty)
   
   ## ---------- 1. normalise model weights ---------------------------------
   weights <- data.table::data.table(ID = models, weight = score / sum(score))
   
   ## ---------- 2. pre-process UHS -----------------------------------------
   UHS <- data.table::copy(uhs)
-  UHS[Tn == 0, Tn := 0.01, by = .(p)]     # avoid log(0)
+  UHS[Tn == 0, Tn := 0.01, by = .(p)]  # avoid log(0)
+  
+  ## Helper for "mean" Sa if no hazard fractile sampling
+  getMeanSa <- function(UHS, Td) {
+    # find the single row with p=="mean" & Tn near Td
+    # or if Tn != Td, do interpolation and then pick "mean" row
+    # For simplicity, we just do a direct subcall:
+    # sampleSa() normally returns a list(SaTable, muLnSa, sdLnSa, Sa).
+    # We'll do it with n=1 and no aggregator. Another approach is reading from UHS directly.
+    
+    # We'll do a minimal approach: we find the row p=="mean" at Tn that is
+    # or we approximate if Tn not in UHS. Then replicate NS times.
+    
+    # We'll re-use sampleSa but do n=1 and a custom 'no aggregator' approach.
+    # Alternatively, do manual interpolation and read "mean".
+    
+    # quick approach: sampleSa() always aggregator. We'll do a trick: p="mean" only
+    # so no aggregator is triggered. Let's do it more simply:
+    
+    # 1) isolate the "mean" row
+    tmpMean <- UHS[Tn == Td & p == "mean"]
+    if (nrow(tmpMean) == 1L) {
+      # done
+      val <- tmpMean$Sa
+    } else if (nrow(tmpMean) == 0) {
+      # do interpolation with "mean" row from various Tn
+      # approach: subset p=="mean", then approx in log-space
+      tmp <- UHS[p=="mean"]
+      if (nrow(tmp)==0) stop("No 'mean' row found for hazard.")
+      # do log interpolation
+      val <- stats::approx(
+        x = log(tmp$Tn),
+        y = log(tmp$Sa),
+        xout = log(Td),
+        rule = 2
+      )$y |> exp()
+    } else {
+      stop("Multiple 'mean' rows for Tn=", Td)
+    }
+    # replicate NS times
+    rep(val, times=NS)
+  }
   
   ## ---------- 3. sample Sa at required periods ---------------------------
-  PGA       <- sampleSa(UHS, Td = 0.01, n = NS)$Sa
-  PGV       <- (PGA^1.0529) * exp(0.1241) * 100      # [cm/s]
-  AI        <- (PGA^1.9228) * exp(2.6109)            # [m/s]
-  Sa_10_Ts  <- sampleSa(UHS, Td = 1.0 * Ts, n = NS)$Sa
-  Sa_13_Ts  <- sampleSa(UHS, Td = 1.3 * Ts, n = NS)$Sa
-  Sa_15_Ts  <- sampleSa(UHS, Td = 1.5 * Ts, n = NS)$Sa
+  # if uncertainty includes "Sa", do the usual aggregator sampling
+  # else use the "mean" Sa repeated NS times
+  if (uncertainty %in% c("Sa", "both")) {
+    PGA      <- sampleSa(UHS, Td = 0.01, n = NS)$Sa
+    Sa_10_Ts <- sampleSa(UHS, Td = 1.0 * Ts, n = NS)$Sa
+    Sa_13_Ts <- sampleSa(UHS, Td = 1.3 * Ts, n = NS)$Sa
+    Sa_15_Ts <- sampleSa(UHS, Td = 1.5 * Ts, n = NS)$Sa
+  } else {
+    # "none" or "Dn" => no hazard fractiles
+    PGA      <- getMeanSa(UHS, Td=0.01)
+    Sa_10_Ts <- getMeanSa(UHS, Td=1.0*Ts)
+    Sa_13_Ts <- getMeanSa(UHS, Td=1.3*Ts)
+    Sa_15_Ts <- getMeanSa(UHS, Td=1.5*Ts)
+  }
+  
+  # PGV, AI from the chosen PGA
+  PGV <- (PGA^1.0529) * exp(0.1241) * 100      # [cm/s]
+  AI  <- (PGA^1.9228) * exp(2.6109)            # [m/s]
   
   ## ---------- 4. Monte-Carlo sampling per model --------------------------
+  # We'll define a small helper that draws from the Dn model or does "deterministic"
+  # If uncertainty includes "Dn", we do rnorm() from each model; else just exp(muLnD).
+  
+  getDnUncertainty <- function(DnFun, ..., n = 1) {
+    # call the model function (returns data.table w/ muLnD, sdLnD, ID)
+    DnModel <- DnFun(...)
+    stopifnot(all(c("muLnD", "sdLnD", "ID") %in% names(DnModel)))
+    
+    if (uncertainty %in% c("Dn","both")) {
+      # do random draws from rnorm
+      # (same as your original getDn code)
+      out <- DnModel[
+        , .(ID, LnD = if (!is.na(sdLnD)) stats::rnorm(n, muLnD, sdLnD) else rep(NA_real_, n)),
+        by = .I
+      ][
+        , .(sample = .I, ID, Dn = exp(LnD))
+      ]
+    } else {
+      # "none" or "Sa" => no Dn aggregator => do deterministic exp(muLnD)
+      out <- DnModel[, .(
+        sample = seq_len(n),  # to keep dimension consistent
+        ID = ID,
+        Dn = exp(muLnD)
+      ), by=.I ]
+    }
+    out
+  }
+  
   DnTable <- data.table::data.table()
   add     <- function(dt, new) data.table::rbindlist(list(dt, new), use.names = TRUE, fill = TRUE)
   
   if ("AM88" %in% models)
-    DnTable <- add(DnTable, getDn(Dn_AM88, PGA = PGA, ky = ky, n = NS))
+    DnTable <- add(DnTable, getDnUncertainty(Dn_AM88, PGA = PGA, ky = ky, n = NS))
   if ("YG91" %in% models)
-    DnTable <- add(DnTable, getDn(Dn_YG91, PGA = PGA, ky = ky, n = NS))
+    DnTable <- add(DnTable, getDnUncertainty(Dn_YG91, PGA = PGA, ky = ky, n = NS))
   if ("JB07" %in% models)
-    DnTable <- add(DnTable, getDn(Dn_JB07, PGA = PGA, AI = AI, ky = ky, n = NS))
+    DnTable <- add(DnTable, getDnUncertainty(Dn_JB07, PGA = PGA, AI = AI, ky = ky, n = NS))
   if ("SR08" %in% models)
-    DnTable <- add(DnTable, getDn(Dn_SR08, PGA = PGA, AI = AI, ky = ky, n = NS))
+    DnTable <- add(DnTable, getDnUncertainty(Dn_SR08, PGA = PGA, AI = AI, ky = ky, n = NS))
   if ("BT07" %in% models)
-    DnTable <- add(DnTable, getDn(Dn_BT07, Ts = Ts, Sa = Sa_10_Ts, Mw = Mw,
-                                  ky = ky, n = NS))
+    DnTable <- add(DnTable, getDnUncertainty(Dn_BT07, Ts = Ts, Sa = Sa_10_Ts, Mw = Mw, ky = ky, n = NS))
   if (tolower(BM_model) %in% c("interface", "subduction") && "BM17" %in% models)
-    DnTable <- add(DnTable, getDn(Dn_BM17, Ts = Ts, Sa = Sa_15_Ts, Mw = Mw,
-                                  ky = ky, n = NS))
+    DnTable <- add(DnTable, getDnUncertainty(Dn_BM17, Ts = Ts, Sa = Sa_15_Ts, Mw = Mw, ky = ky, n = NS))
   if (tolower(BM_model) %in% c("shallow", "crustal") && "BM19" %in% models)
-    DnTable <- add(DnTable, getDn(Dn_BM19, Ts = Ts, Sa = Sa_13_Ts,
-                                  PGA = PGA, PGV = PGV, Mw = Mw,
-                                  ky = ky, n = NS))
+    DnTable <- add(DnTable, getDnUncertainty(Dn_BM19, Ts = Ts, Sa = Sa_13_Ts,
+                                             PGA = PGA, PGV = PGV, Mw = Mw,
+                                             ky = ky, n = NS))
   
-  ## ---------- 5. weighted quantiles (original logic, no dummy key) -------
-  AUX   <- weights[DnTable, on = "ID"]
+  ## ---------- 5. Weighted quantiles (original logic) ---------------------
+  # same as your code, but we might produce 1 repeated sample from hazard if "none"/"Dn"
+  
+  AUX <- weights[DnTable, on = "ID"]
   AUX[, units := "cm"]
   
+  # define the probabilities from the UHS (excluding p=="mean")
   probs <- UHS[p != "mean", unique(as.numeric(p))]
   
+  # Weighted quantiles by model weight
   Dn_q <- AUX[, .(
     p  = probs,
     Dn = Hmisc::wtd.quantile(
@@ -85,11 +170,14 @@ fitDn <- function(
       weights = weight,
       probs   = probs,
       type    = "quantile",
-      na.rm   = TRUE)
+      na.rm   = TRUE
+    )
   )]
   
-  # "mean" row: if all Dn are NA, this yields NaN
+  # "mean" row unweighted => or do wtd.mean? It's your call. 
+  # We'll keep your approach for debugging. 
   Dn_mean <- data.table::data.table(p = "mean", Dn = mean(AUX$Dn))
+  
   data.table::rbindlist(list(Dn_q, Dn_mean))
 }
 

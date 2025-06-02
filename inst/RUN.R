@@ -25,7 +25,7 @@ DnTable <- lapply(ky_TARGET, function(kyi) {
     TR %in% c(475, 2475) &
       Vs30 %in% c(300, 400) &
       Vref == 760
-  ][, fitDn(.SD, ky = kyi, Ts = Ts, Mw = 6.5, NS = 100), by = .(TR, Vs30)][, ky := kyi][Dn < 1e-16, Dn := 0]
+  ][, fitDn(.SD, ky = kyi, Ts = Ts, Mw = 6.5, NS = 100,uncertainty="none"), by = .(TR, Vs30)][, ky := kyi][Dn < 1e-16, Dn := 0]
   
 }) |> rbindlist()
 
