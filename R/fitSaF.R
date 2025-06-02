@@ -90,7 +90,11 @@ getSaF <- function(.fun, ..., n = 1) {
   ## 1. Build the table of log-mean/σ from the supplied model
   SaFModel <- .fun(...)   # must return muLnSaF, sdLnSaF, ID
   stopifnot(all(c("muLnSaF", "sdLnSaF", "ID") %in% names(SaFModel)))
-  
+  ## ----- sanity-check ---------------------------------------------------
+  if (!is.null(n) && n != nrow(SaFModel)) {
+    stop("Length of Sa/pga vectors (", nrow(SaFModel),
+         ") does not match argument n = ", n, call. = FALSE)
+  }
   ## 2. Vectorised sampling – ONE deviate per row, not n×n
   SaFTable <- SaFModel[
     , .(ID,
@@ -107,8 +111,9 @@ getSaF <- function(.fun, ..., n = 1) {
 
 
 
-#' Site–factor model SaF_ST17  (canonical)
-#'
+# ============================================================
+# Site–factor model SaF_ST17  (canonical)
+# ============================================================
 #' @param Sa    numeric – sampled spectral acceleration at Tn (g)
 #' @param pga   numeric – sampled peak ground acceleration (g)
 #' @param Tn    numeric scalar – oscillator period (s)
