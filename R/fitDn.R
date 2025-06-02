@@ -96,18 +96,37 @@ fitDn <- function(
 # ---------------------------------------------------------------------------
 #' Internal helper: draw n samples from a displacement model
 #' @keywords internal
+#' @keywords internal
 getDn <- function(.fun, ..., n = 1) {
+  # Call the model
   DnModel <- .fun(...)
   stopifnot(all(c("muLnD", "sdLnD", "ID") %in% names(DnModel)))
   
-  # If sdLnD is NA, the entire sample from that model is NA
+  # Check if any row has invalid muLnD or sdLnD
+  # "Reasonable" = finite muLnD, finite sdLnD, sdLnD>0
+  isValid <- is.finite(DnModel$muLnD) &
+    is.finite(DnModel$sdLnD) &
+    (DnModel$sdLnD > 0)
+  
+  # If ANY row fails, skip the entire model (return nothing)
+  if (!all(isValid)) {
+    # Return empty data.table with correct column names
+    return(data.table::data.table(
+      sample = integer(0), 
+      ID     = character(0), 
+      Dn     = numeric(0)
+    ))
+  }
+  
+  # Otherwise, do the normal random sampling
   DnModel[
-    , .(ID, LnD = if (!is.na(sdLnD)) rnorm(n, muLnD, sdLnD) else rep(NA_real_, n)),
+    , .(ID, LnD = stats::rnorm(n, muLnD, sdLnD)),
     by = .I
   ][
     , .(sample = .I, ID, Dn = exp(LnD))
   ]
 }
+
 
 
 #  Displacement models (empirical equations) --------------------------------
