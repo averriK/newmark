@@ -12,7 +12,8 @@ fitDn(
   NS = 30,
   models = c("YG91", "AM88", "JB07", "BT07", "SR08", "BM17", "BM19"),
   score = c(1, 2, 2, 3, 3, 4, 4),
-  BM_model = "crustal"
+  BM_model = "crustal",
+  uncertainty = c("none", "Sa", "Dn", "both")
 )
 }
 \arguments{

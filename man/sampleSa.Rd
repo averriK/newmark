@@ -4,18 +4,37 @@
 \alias{sampleSa}
 \title{Sample spectral acceleration consistent with UHS quantiles}
 \usage{
-sampleSa(UHS, Td, n)
+sampleSa(
+  UHS,
+  Td,
+  n = 1,
+  piecewise = TRUE,
+  pLimits = c(0, 1),
+  checkAscending = TRUE
+)
 }
 \arguments{
 \item{UHS}{data.table with Tn, Sa, p (prob labels + "mean").}
 
 \item{Td}{numeric scalar – target period (s).}
 
-\item{n}{integer – number of samples.}
+\item{n}{integer – number of samples (default 1).}
+
+\item{piecewise}{logical; if TRUE (default), do piecewise linear interpolation
+to sample from the p–ln(Sa) curve. If FALSE, do the old param aggregator.}
+
+\item{pLimits}{numeric length-2 vector, e.g. c(0,1). If narrower, e.g. c(0.1,0.9),
+we ignore tails outside that range (piecewise mode only).}
+
+\item{checkAscending}{logical; if TRUE, we ensure ln(Sa) is ascending in p
+(piecewise mode only).}
 }
 \value{
-list(SaTable, muLnSa, sdLnSa, Sa)
+list(SaTable, muLnSa, sdLnSa, Sa). If \code{piecewise=TRUE}, \code{sdLnSa}
+is set to NA, since there's no param aggregator.
 }
 \description{
-Sample spectral acceleration consistent with UHS quantiles
+Extended version of the original helper. If \code{piecewise=TRUE}, it skips the
+parametric aggregator methods (sdQ, rnormQ) and uses direct piecewise interpolation
+in the (p, ln(Sa)) space. Otherwise, it behaves like the original aggregator code.
 }
