@@ -41,7 +41,7 @@ DnTable <- UHSTable[
     Vs30 %in% c(300, 400) &
     Vref == 760
 ][,
-  fitDn(.SD, ky = ky, Ts = Ts, Mw = 6.5, NS = 1000,,uncertainty="Sa"),
+  fitDn(.SD, ky = ky, Ts = Ts, Mw = 6.5, NS = 1000,uncertainty="both"),
   by = .(TR, Vs30)
 ][abs(Dn) < 1e-16, Dn := 0][]
 DnTable[TR==475 & Vs30 ==400 & p %in% c(0.16,0.50,"mean",0.84)]

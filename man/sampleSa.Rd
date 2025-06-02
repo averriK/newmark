@@ -2,13 +2,15 @@
 % Please edit documentation in R/sampleSa.R
 \name{sampleSa}
 \alias{sampleSa}
-\title{Sample spectral acceleration consistent with UHS quantiles}
+\title{Sample spectral acceleration with optional piecewise approach,
+enforcing monotonic ln(Sa).}
 \usage{
 sampleSa(
   UHS,
   Td,
   n = 1,
   piecewise = TRUE,
+  forceMonotonic = TRUE,
   pLimits = c(0, 1),
   checkAscending = TRUE
 )
@@ -20,21 +22,18 @@ sampleSa(
 
 \item{n}{integer – number of samples (default 1).}
 
-\item{piecewise}{logical; if TRUE (default), do piecewise linear interpolation
-to sample from the p–ln(Sa) curve. If FALSE, do the old param aggregator.}
+\item{piecewise}{logical; if TRUE, do piecewise interpolation in (p, ln(Sa)).}
 
-\item{pLimits}{numeric length-2 vector, e.g. c(0,1). If narrower, e.g. c(0.1,0.9),
-we ignore tails outside that range (piecewise mode only).}
+\item{forceMonotonic}{logical; if TRUE, clamp ln(Sa) so it's non-decreasing.}
 
-\item{checkAscending}{logical; if TRUE, we ensure ln(Sa) is ascending in p
-(piecewise mode only).}
+\item{pLimits}{length-2 numeric, e.g. c(0,1) or c(0.1,0.9); probability range to keep.}
+
+\item{checkAscending}{logical; if TRUE, we still check for descending ln(Sa) but fix it anyway if forceMonotonic=TRUE.}
 }
 \value{
-list(SaTable, muLnSa, sdLnSa, Sa). If \code{piecewise=TRUE}, \code{sdLnSa}
-is set to NA, since there's no param aggregator.
+list(SaTable, muLnSa, sdLnSa, Sa) same as before
 }
 \description{
-Extended version of the original helper. If \code{piecewise=TRUE}, it skips the
-parametric aggregator methods (sdQ, rnormQ) and uses direct piecewise interpolation
-in the (p, ln(Sa)) space. Otherwise, it behaves like the original aggregator code.
+Sample spectral acceleration with optional piecewise approach,
+enforcing monotonic ln(Sa).
 }

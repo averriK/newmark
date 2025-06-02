@@ -13,7 +13,7 @@ fitDn(
   models = c("YG91", "AM88", "JB07", "BT07", "SR08", "BM17", "BM19"),
   score = c(1, 2, 2, 3, 3, 4, 4),
   BM_model = "crustal",
-  uncertainty = c("none", "Sa", "Dn", "both")
+  uncertainty = "none"
 )
 }
 \arguments{
@@ -31,20 +31,31 @@ fitDn(
 
 \item{score}{numeric vector of same length as models; converted to weights.}
 
-\item{BM_model}{"crustal"/"shallow" or "interface"/"subduction".}
+\item{BM_model}{character, either "crustal"/"shallow" or "interface"/"subduction".}
+
+\item{uncertainty}{character: any combination of "none", "Sa", "Dn", "both".
+For example, user can enter \code{c("sa","dn")} or just "sA", etc.
+\itemize{
+\item "none": no hazard fractile sampling, no displacement model random draws
+\item "Sa": hazard fractile sampling only
+\item "Dn": displacement model random draws only
+\item "both": hazard + displacement model random draws
+}}
 }
 \value{
-data.table with p (probability label) and weighted Dn (cm).
+data.table with columns:
+\itemize{
+\item p (probability label, e.g. "0.16", "0.5", "mean")
+\item Dn (cm) Weighted quantiles from all models
+}
 }
 \description{
 Core routines for computing permanent Newmark displacements (Dn)
 with empirical sliding-block models and Monte-Carlo sampling.
 }
-\keyword{Newmark}
-\keyword{Weighted}
-\keyword{displacement}
-\keyword{from}
+\details{
+\code{fitDn()} computes weighted quantiles of Newmark displacement from multiple
+sliding-block models, optionally sampling hazard (Sa) and/or displacement
+model uncertainty.
+}
 \keyword{internal}
-\keyword{models}
-\keyword{multiple}
-\keyword{quantiles}
