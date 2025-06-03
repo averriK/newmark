@@ -38,151 +38,165 @@ fitSaF <- function(
     score       = rep(1, length(models)),
     uncertainty = c("none","Sa","F","both")
 ) {
-  # 1) parse `uncertainty`
-  unc_set  <- tolower(uncertainty)
-  hasSa <- any(unc_set %in% "sa")
-  hasF  <- any(unc_set %in% "f")
-  unc_mode <- "none"
-  if (hasSa && hasF) {
-    unc_mode <- "both"
-  } else if (hasSa && !hasF) {
-    unc_mode <- "sa"
-  } else if (!hasSa && hasF) {
-    unc_mode <- "f"
+  ## ------------------------------------------------------------------------
+  ## 1) Parse `uncertainty`
+  ## ------------------------------------------------------------------------
+  unc_vec <- tolower(uncertainty)
+  doSa <- any(unc_vec %in% "sa")
+  doF  <- any(unc_vec %in% "f")
+  mode <- "none"
+  if (doSa && doF) {
+    mode <- "both"
+  } else if (doSa && !doF) {
+    mode <- "sa"
+  } else if (!doSa && doF) {
+    mode <- "f"
   }
   
-  # 2) model weights
-  wTable <- data.table::data.table(ID = models, weight = score/sum(score))
+  ## ------------------------------------------------------------------------
+  ## 2) Build model-weight table. Insert "gem" if not present
+  ## ------------------------------------------------------------------------
+  AUX <- data.table(ID=models, weight=score)
+  if (!("gem" %in% AUX$ID)) {
+    AUX <- rbind(AUX, data.table(ID="gem", weight=1))
+  }
+  AUX[, weight := weight / sum(weight)]
+  wTable <- data.table::copy(AUX)  # store final weight table
   
-  # 3) pre-process UHS
+  ## ------------------------------------------------------------------------
+  ## 3) Preprocess UHS: Tn=0 => Tn=0.01
+  ## ------------------------------------------------------------------------
   UHS <- data.table::copy(uhs)
   UHS[Tn == 0, Tn := 0.01, by = .(p)]
   
-  # small helper: sample hazard draws if "Sa", else replicate "mean"
-  getHazardDraws <- function(UHS, Td, n=1) {
-    if (unc_mode %in% c("sa","both")) {
-      # aggregator
-      out <- sampleSa(UHS, Td=Td, n=n)$Sa
+  # Helper to sample hazard
+  getHazardDraws <- function(UHS, period, n=1) {
+    if (mode %in% c("sa","both")) {
+      # aggregator from partial-quantile or piecewise
+      out <- sampleSa(UHS, Td=period, n=n)$Sa
     } else {
-      # deterministic => replicate mean
-      meanRow <- UHS[Tn==Td & p=="mean"]
-      if (nrow(meanRow)!=1L)
-        stop("Need exactly one 'mean' row at Tn=",Td," for hazard=mean.")
-      out <- rep(meanRow$Sa, times=n)
+      # replicate the mean
+      TEMP <- UHS[Tn==period & p=="mean"]
+      if (nrow(TEMP)!=1) {
+        stop("No unique mean row at Tn=", period)
+      }
+      out <- rep(TEMP$Sa, times=n)
     }
     out
   }
   
-  # We'll build a final table
-  bigTable <- data.table()
-  add <- function(dt, new) data.table::rbindlist(list(dt,new), use.names=TRUE)
+  ## ------------------------------------------------------------------------
+  ## 4) We'll produce a final aggregator table
+  ## ------------------------------------------------------------------------
+  RES <- data.table()  # final aggregator across Tn
   
-  # gather unique Tn>0.01
+  # gather Tn>0.01
   TnList <- sort(unique(UHS[Tn>0.009, Tn]))
   
-  # sample once for PGA
-  pgaDraws <- getHazardDraws(UHS, Td=0.01, n=NS)
+  # sample pga once at Tn=0.01
+  pga <- getHazardDraws(UHS, period=0.01, n=NS)
   
   for (thisTn in TnList) {
-    # hazard draws for Tn
-    SaDraws <- getHazardDraws(UHS, Td=thisTn, n=NS)
+    # hazard draws for that Tn
+    SaRock <- getHazardDraws(UHS, period=thisTn, n=NS)
     
-    # We'll store all draws from all site-factor models
-    # *and* we keep the original SaRock in the same row
-    drawDT <- data.table()
-    
+    # Build a single table named AUX that stores sample, ID, SaRock, SaF
     if (vs30 == vref) {
-      # no amplification => ID="Rock" => SaF=SaDraws
-      # store (SaRock, SaF=SaRock)
-      tmpDT <- data.table(
+      # no amplification => ID="gem"
+      AUX <- data.table(
         sample=1:NS,
-        ID="Rock",
-        SaRock=SaDraws,
-        SaF   =SaDraws
+        ID    ="gem",
+        SaRock=SaRock,
+        SaF   =SaRock   # same as rock
       )
-      drawDT <- add(drawDT, tmpDT)
     } else {
-      # vs30 != vref => site-factor modeling
+      # vs30 != vref => aggregator with site-factor models
+      AUX <- data.table()
       for (modID in models) {
-        # row-by-row aggregator
-        rowDT <- data.table(
-          SaRock=SaDraws,
-          pga   = pgaDraws,
-          TnVal = thisTn
+        TEMP <- data.table(
+          sample = 1:NS,
+          ID     = modID,
+          SaRock = SaRock,
+          pga    = pga
         )
         
-        rowDT2 <- rowDT[, {
-          # call e.g. SaF_ST17
-          tmp <- SaF_ST17(Sa=SaRock, pga=pga, Tn=TnVal, vs30=vs30, vref=vref)
-          # returns muLnSaF, sdLnSaF, ID
-          
-          # If "F" in unc_mode => random => else deterministic
-          if (unc_mode %in% c("f","both")) {
+        # row-by-row aggregator
+        # if "F" => random => else deterministic
+        TEMP[, SaF := {
+          # e.g. call SaF_ST17
+          tmp <- SaF_ST17(
+            Sa  = SaRock,
+            pga = pga,
+            Tn  = thisTn,
+            vs30= vs30,
+            vref= vref
+          )
+          if (mode %in% c("f","both")) {
+            # random
             LnSaF <- rnorm(1, tmp$muLnSaF, tmp$sdLnSaF)
-            SaFval<- exp(LnSaF)
+            exp(LnSaF)
           } else {
-            SaFval<- exp(tmp$muLnSaF)
+            # deterministic
+            exp(tmp$muLnSaF)
           }
-          .(SaRock=SaRock, SaF=SaFval)
-        }, by=.(sample=.I)]
+        }, by=.(sample)]
         
-        rowDT2[, ID := modID]
-        
-        drawDT <- add(drawDT, rowDT2)
+        AUX <- rbind(AUX, TEMP[, .(sample, ID, SaRock, SaF)])
       }
     }
     
-    # Now `drawDT` has columns: (sample, ID, SaRock, SaF).
-    # We do a weighted aggregator => we want quantiles of both SaRock & SaF.
+    # aggregator => join with wTable => get weight
+    AUX <- wTable[AUX, on="ID"]
     
-    wDT <- wTable[drawDT, on="ID"]  # merges "weight"
+    # define p
+    PROBS <- UHS[p!="mean", unique(as.numeric(p))]
     
-    # define p in (UHS)
-    probs <- UHS[p!="mean", unique(as.numeric(p))]
-    
-    # Weighted quantiles for SaRock
-    SaRock_q <- wDT[, .(
-      p=probs,
+    # Weighted quantiles => SaRock
+    # (some calls to Hmisc)
+    SaRock_q <- AUX[, .(
+      p=PROBS,
       SaRock=Hmisc::wtd.quantile(
         x=SaRock,
         weights=weight,
-        probs=probs,
+        probs=PROBS,
         type="quantile",
         na.rm=TRUE
       )
     )]
-    # Weighted quantiles for SaF
-    SaF_q <- wDT[, .(
-      p=probs,
+    # Weighted quantiles => SaF
+    SaF_q <- AUX[, .(
+      p=PROBS,
       SaF=Hmisc::wtd.quantile(
         x=SaF,
         weights=weight,
-        probs=probs,
+        probs=PROBS,
         type="quantile",
         na.rm=TRUE
       )
     )]
     
-    # mean row for both
-    meanRow_rock <- data.table(p="mean", SaRock=mean(wDT$SaRock))
-    meanRow_f    <- data.table(p="mean", SaF   =mean(wDT$SaF))
+    # add mean row
+    mean_rock <- data.table(p="mean", SaRock=mean(AUX$SaRock))
+    mean_site <- data.table(p="mean", SaF   =mean(AUX$SaF))
     
-    # combine them: note that SaRock_q and SaF_q have the same length & same p order => we can cbind
-    outQ <- cbind(SaRock_q[, .(p, SaRock)], SaF=SaF_q$SaF)
+    # combine side-by-side => cbind
+    OUTQ <- cbind(
+      SaRock_q[, .(p, SaRock)],
+      SaF=SaF_q$SaF
+    )
+    # add mean row
+    MeanRow <- data.table(
+      p      ="mean",
+      SaRock =mean_rock$SaRock,
+      SaF    =mean_site$SaF
+    )
+    OUTQ <- rbind(OUTQ, MeanRow)
+    OUTQ[, Tn := thisTn]
     
-    # add the mean row => do it carefully:
-    outMean <- data.table(p="mean", SaRock=meanRow_rock$SaRock, SaF=meanRow_f$SaF)
-    outQ <- rbindlist(list(outQ, outMean))
-    
-    # store Tn
-    outQ[, Tn := thisTn]
-    
-    # accumulate
-    bigTable <- add(bigTable, outQ)
+    RES <- rbind(RES, OUTQ)
   }
   
-  # reorder
-  data.table::setcolorder(bigTable, c("Tn","p","SaRock","SaF"))
-  bigTable[]
+  data.table::setcolorder(RES, c("Tn","p","SaRock","SaF"))
+  RES[]
 }
 
