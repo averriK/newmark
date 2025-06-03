@@ -32,7 +32,6 @@
 #' @import data.table
 #' @importFrom Hmisc wtd.quantile
 #' @importFrom stats rnorm runif approx
-#' @keywords internal
 #' @export
 fitDn <- function(
     uhs,    

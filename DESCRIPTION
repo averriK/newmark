@@ -1,7 +1,7 @@
 Package: newmark
 Type: Package
 Title: Monte-Carlo Ensemble Newmark Displacements
-Version: 0.1.0
+Version: 0.1.5
 Authors@R:
     person(given = "Alejandro",
            family = "Verri Kozlowski",
