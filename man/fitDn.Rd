@@ -58,4 +58,3 @@ with empirical sliding-block models and Monte-Carlo sampling.
 sliding-block models, optionally sampling hazard (Sa) and/or displacement
 model uncertainty.
 }
-\keyword{internal}

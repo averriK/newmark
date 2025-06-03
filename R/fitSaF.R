@@ -38,146 +38,165 @@ fitSaF <- function(
     score       = rep(1, length(models)),
     uncertainty = c("none","Sa","F","both")
 ) {
-  ## 1) parse user input for uncertainty
-  unc_set  <- tolower(uncertainty)
-  hasSa <- any(unc_set %in% "sa")
-  hasF  <- any(unc_set %in% "f")
-  unc_mode <- "none"
-  if (hasSa && hasF) {
-    unc_mode <- "both"
-  } else if (hasSa && !hasF) {
-    unc_mode <- "sa"
-  } else if (!hasSa && hasF) {
-    unc_mode <- "f"
+  ## ------------------------------------------------------------------------
+  ## 1) Parse `uncertainty`
+  ## ------------------------------------------------------------------------
+  unc_vec <- tolower(uncertainty)
+  doSa <- any(unc_vec %in% "sa")
+  doF  <- any(unc_vec %in% "f")
+  mode <- "none"
+  if (doSa && doF) {
+    mode <- "both"
+  } else if (doSa && !doF) {
+    mode <- "sa"
+  } else if (!doSa && doF) {
+    mode <- "f"
   }
   
-  ## 2) normalise model weights
-  wTable <- data.table::data.table(ID=models, weight=score/sum(score))
+  ## ------------------------------------------------------------------------
+  ## 2) Build model-weight table. Insert "gem" if not present
+  ## ------------------------------------------------------------------------
+  AUX <- data.table(ID=models, weight=score)
+  if (!("gem" %in% AUX$ID)) {
+    AUX <- rbind(AUX, data.table(ID="gem", weight=1))
+  }
+  AUX[, weight := weight / sum(weight)]
+  wTable <- data.table::copy(AUX)  # store final weight table
   
-  ## 3) pre-process UHS
+  ## ------------------------------------------------------------------------
+  ## 3) Preprocess UHS: Tn=0 => Tn=0.01
+  ## ------------------------------------------------------------------------
   UHS <- data.table::copy(uhs)
-  UHS[Tn == 0, Tn := 0.01, by=.(p)]  # if Tn=0 => set Tn=0.01
-  # NOTE: your site factor might rely on Tn=0.01 as "PGA" or Tn=0 => unify your approach
+  UHS[Tn == 0, Tn := 0.01, by = .(p)]
   
-  # We'll define a small helper to get hazard draws if "Sa" is in uncertainty:
-  getHazardDraws <- function(UHS, Td, n=1) {
-    if (unc_mode %in% c("sa","both")) {
-      out <- sampleSa(UHS, Td=Td, n=n)$Sa
+  # Helper to sample hazard
+  getHazardDraws <- function(UHS, period, n=1) {
+    if (mode %in% c("sa","both")) {
+      # aggregator from partial-quantile or piecewise
+      out <- sampleSa(UHS, Td=period, n=n)$Sa
     } else {
-      # no fractile => replicate mean
-      # find the "mean" row at Tn=Td
-      meanRow <- UHS[Tn==Td & p=="mean"]
-      if (nrow(meanRow)!=1L)
-        stop("Need exactly one 'mean' row at Tn=",Td," for hazard = mean.")
-      val <- meanRow$Sa
-      out <- rep(val, times=n)
+      # replicate the mean
+      TEMP <- UHS[Tn==period & p=="mean"]
+      if (nrow(TEMP)!=1) {
+        stop("No unique mean row at Tn=", period)
+      }
+      out <- rep(TEMP$Sa, times=n)
     }
     out
   }
   
-  ## 4) We'll build up a big table of random draws for each Tn>0.
-  # Each Tn => we get hazard draws for that Tn => call them SaRock(Tn).
-  # We also get hazard draws for Tn=0.01 => pga. Then we combine with site factor if vs30!=vref
+  ## ------------------------------------------------------------------------
+  ## 4) We'll produce a final aggregator table
+  ## ------------------------------------------------------------------------
+  RES <- data.table()  # final aggregator across Tn
   
-  bigTable <- data.table()
-  add <- function(dt, new) rbindlist(list(dt,new), use.names=TRUE, fill=TRUE)
+  # gather Tn>0.01
+  TnList <- sort(unique(UHS[Tn>0.009, Tn]))
   
-  # gather unique Tn>0.01 from the input
-  TnList <- sort(unique(UHS[Tn>0.009, Tn]))  # e.g. skip Tn=0.01 if you treat that as PGA
-  
-  # sample PGA draws once => we'll reuse them for each Tn
-  # or you can do it Tn=0.01 each time, but typically one set of PGA draws is enough
-  pgaDraws <- getHazardDraws(UHS, Td=0.01, n=NS)  # length=NS
+  # sample pga once at Tn=0.01
+  pga <- getHazardDraws(UHS, period=0.01, n=NS)
   
   for (thisTn in TnList) {
-    # hazard draw for SaRock at Tn=thisTn
-    SaDraws <- getHazardDraws(UHS, Td=thisTn, n=NS)  # length=NS
+    # hazard draws for that Tn
+    SaRock <- getHazardDraws(UHS, period=thisTn, n=NS)
     
-    # site factor logic
-    # if vs30==vref => factor=1 => final SaF= SaDraws
-    # else => we do a row-by-row aggregator with site-factor model(s)
-    DnTable <- data.table()  # we'll store all random draws from each site-factor model
-    if (vs30==vref) {
-      # no amplification
-      # produce one "model" => ID="NoAmpl"
-      outDT <- data.table(
-        ID="Rock",
+    # Build a single table named AUX that stores sample, ID, SaRock, SaF
+    if (vs30 == vref) {
+      # no amplification => ID="gem"
+      AUX <- data.table(
         sample=1:NS,
-        SaF=SaDraws  # direct
+        ID    ="gem",
+        SaRock=SaRock,
+        SaF   =SaRock   # same as rock
       )
-      DnTable <- add(DnTable, outDT)
     } else {
-      # vs30!=vref => we call each model. E.g. "ST17"
-      for (mod in models) {
-        # 1) get muLnF, sdLnF => depends on pgaDraws, thisTn, vs30
-        # but we likely want row-by-row approach => each of the NS hazard draws => unique pga, Sa
-        # => we do something akin to a "getFUncertainty()" aggregator
-        # We'll define a mini table for this Tn
-        rowDT <- data.table(
-          SaRock=SaDraws,
-          pga   = pgaDraws,
-          TnVal = thisTn
+      # vs30 != vref => aggregator with site-factor models
+      AUX <- data.table()
+      for (modID in models) {
+        TEMP <- data.table(
+          sample = 1:NS,
+          ID     = modID,
+          SaRock = SaRock,
+          pga    = pga
         )
-        # for each row, call e.g. SaF_ST17(Sa=SaRock, pga=pga, Tn=TnVal,...)
-        # then if "F" in unc_mode => random draws => else deterministic
         
-        rowDT2 <- rowDT[, {
+        # row-by-row aggregator
+        # if "F" => random => else deterministic
+        TEMP[, SaF := {
+          # e.g. call SaF_ST17
           tmp <- SaF_ST17(
-            Sa=SaRock, pga=pga, Tn=TnVal,
-            vs30=vs30, vref=vref
-          ) 
-          # returns data.table with muLnSaF, sdLnSaF, ID
-          
-          if (unc_mode %in% c("f","both")) {
-            # random draw
+            Sa  = SaRock,
+            pga = pga,
+            Tn  = thisTn,
+            vs30= vs30,
+            vref= vref
+          )
+          if (mode %in% c("f","both")) {
+            # random
             LnSaF <- rnorm(1, tmp$muLnSaF, tmp$sdLnSaF)
-            SaFval<- exp(LnSaF)
+            exp(LnSaF)
           } else {
             # deterministic
-            SaFval<- exp(tmp$muLnSaF)
+            exp(tmp$muLnSaF)
           }
-          .(SaF=SaFval)
-        }, by=.(sample=.I)]  # sample index => 1..NS
-        rowDT2[, ID:=mod]
+        }, by=.(sample)]
         
-        DnTable <- add(DnTable, rowDT2)
-      } # end for each model
+        AUX <- rbind(AUX, TEMP[, .(sample, ID, SaRock, SaF)])
+      }
     }
     
-    # now DnTable has columns: sample, ID, SaF
-    # aggregator => weighted quantiles => produce p in (p from UHS) => etc.
-    # same as fitDn: define "p" from UHS if p != "mean"
-    # We'll do a line like:
-    wDT <- wTable[DnTable, on="ID"]
+    # aggregator => join with wTable => get weight
+    AUX <- wTable[AUX, on="ID"]
     
-    # define the hazard fractiles from UHS => exclude p=="mean"
-    # typically the same p used for Tn=thisTn
-    # or we do all p in UHS[p!="mean", unique(as.numeric(p))] => same approach
-    # for simplicity:
-    probs <- UHS[p!="mean", unique(as.numeric(p))]
+    # define p
+    PROBS <- UHS[p!="mean", unique(as.numeric(p))]
     
-    # Weighted aggregator => Hmisc::wtd.quantile
-    SaF_q <- wDT[, .(
-      p  = probs,
-      SaF=Hmisc::wtd.quantile(
-        x=SaF,
+    # Weighted quantiles => SaRock
+    # (some calls to Hmisc)
+    SaRock_q <- AUX[, .(
+      p=PROBS,
+      SaRock=Hmisc::wtd.quantile(
+        x=SaRock,
         weights=weight,
-        probs=probs,
+        probs=PROBS,
         type="quantile",
         na.rm=TRUE
       )
     )]
-    # mean row
-    SaF_mean <- data.table(p="mean", SaF=mean(wDT$SaF))
+    # Weighted quantiles => SaF
+    SaF_q <- AUX[, .(
+      p=PROBS,
+      SaF=Hmisc::wtd.quantile(
+        x=SaF,
+        weights=weight,
+        probs=PROBS,
+        type="quantile",
+        na.rm=TRUE
+      )
+    )]
     
-    outQ <- rbindlist(list(SaF_q, SaF_mean))
-    outQ[, Tn:=thisTn]
+    # add mean row
+    mean_rock <- data.table(p="mean", SaRock=mean(AUX$SaRock))
+    mean_site <- data.table(p="mean", SaF   =mean(AUX$SaF))
     
-    # store
-    bigTable <- add(bigTable, outQ)
-  } # end for each Tn
+    # combine side-by-side => cbind
+    OUTQ <- cbind(
+      SaRock_q[, .(p, SaRock)],
+      SaF=SaF_q$SaF
+    )
+    # add mean row
+    MeanRow <- data.table(
+      p      ="mean",
+      SaRock =mean_rock$SaRock,
+      SaF    =mean_site$SaF
+    )
+    OUTQ <- rbind(OUTQ, MeanRow)
+    OUTQ[, Tn := thisTn]
+    
+    RES <- rbind(RES, OUTQ)
+  }
   
-  # reorder columns
-  data.table::setcolorder(bigTable, c("Tn","p","SaF"))
-  bigTable[]
+  data.table::setcolorder(RES, c("Tn","p","SaRock","SaF"))
+  RES[]
 }
+
