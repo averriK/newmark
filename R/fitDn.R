@@ -1,5 +1,5 @@
 # R/fitDn.R
-
+# nolint start
 #' @title Seismic Newmark Displacement Library
 #' @description Core routines for computing permanent Newmark displacements (Dn)
 #'   with empirical sliding-block models and Monte-Carlo sampling.
@@ -115,21 +115,25 @@ fitDn <- function(
         DnModel <- DnFun(...)
         stopifnot(all(c("muLnD", "sdLnD", "ID") %in% names(DnModel)))
 
-        # any negative or NA stdev -> treat as 0
-        safe_sd <- ifelse(is.na(DnModel$sdLnD) | (DnModel$sdLnD < 0), 0, DnModel$sdLnD)
+        # any negative, NA, or non-finite stdev -> treat as 0 (deterministic)
+        safe_sd <- ifelse(
+            !is.finite(DnModel$sdLnD) | (DnModel$sdLnD < 0),
+            0,
+            DnModel$sdLnD
+        )
 
         if (unc_mode %in% c("dn", "both")) {
+            # ----- random draws from lognormal( muLnD, sdLnD ) -------------
             out <- DnModel[
                 ,
                 {
-                    # vectorised approach
+                    # vectorised approach across each row
                     draws <- mapply(
                         function(mu, sd) {
                             if (sd == 0) {
-                                # purely deterministic => just replicate mu
+                                # purely deterministic => replicate mu
                                 rep(mu, n)
                             } else {
-                                # normal draws
                                 rnorm(n, mean = mu, sd = sd)
                             }
                         },
@@ -142,21 +146,25 @@ fitDn <- function(
                 },
                 by = .I
             ][
-                , .(sample = seq_len(.N), ID, Dn = exp(LnD))
+                ,
+                .(sample = seq_len(.N), ID, Dn = exp(LnD))
             ]
         } else {
-            # "none" or "sa" => deterministic
+            # ----- "none" or "sa" => purely deterministic  -----------------
             out <- DnModel[
-                , .(
+                ,
+                .(
                     sample = seq_len(n),
                     ID,
-                    Dn = exp(muLnD)
-                ), # possibly zero if muLnD = -Inf
+                    Dn = exp(muLnD) # could be zero if muLnD == -Inf
+                ),
                 by = .I
             ]
         }
+
         out
     }
+
 
     DnTable <- data.table::data.table()
     add <- function(dt, new) data.table::rbindlist(list(dt, new), use.names = TRUE, fill = TRUE)
