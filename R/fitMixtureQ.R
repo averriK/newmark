@@ -5,23 +5,16 @@
 #' into a single mean via \code{mean(meanValue)}, then fits a distribution
 #' to a single set of partial quantiles \code{(p, q)}. The resulting
 #' standard deviation is chosen by your existing aggregator logic
-#' (see \code{\link{fitAllMethodsQ}} and \code{\link{aggregateSigmaQ}}).
 #'
 #' @param meanValue numeric vector of means (one per scenario).  Will be averaged.
 #' @param p numeric vector of probabilities (strictly between 0 and 1).
 #' @param q numeric vector of quantiles corresponding to \code{p}.
 #' @param nuStart numeric scalar, starting df for Student-t fit (method 4). Default 10.
 #' @param deltaD numeric scalar, acceptance band for aggregator. Default 0.01.
-#' @return A single-row \code{data.frame} in the style of \code{\link{templateDF}}:
-#'   \item{method}{"mix"}
-#'   \item{sigma}{the robust \code{sd} of the final distribution fit}
-#'   \item{d}{\code{NA}}
-#'   \item{sse}{\code{NA}}
-#'   \item{muHat}{the final mean (average of \code{meanValue})}
-#'   \item{other columns}{\code{NA}}
-#'
-#' @keywords internal
-#' @noRd
+#' @return A single-row \code{data.frame} 
+#'   \item{sd}{the robust \code{sd} of the final distribution fit}
+#'   \item{mu}{the final mean (average of \code{meanValue})}
+#' @export
 fitMixtureQ <- function(
     meanValue,
     p,
@@ -64,12 +57,9 @@ fitMixtureQ <- function(
   
   # 4) Build the final single-row data.frame
   #    method="mix", store the combined mean in muHat, set d/sse=NA
-  out <- templateDF(
-    method = "mix",
-    sigma  = sdValue,
-    d      = NA_real_,
-    sse    = NA_real_,
-    muHat  = muComb
+  out <- data.table(
+    sd  = sdValue,
+    mu  = muComb
   )
   
   return(out)
