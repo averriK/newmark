@@ -112,59 +112,49 @@ fitDn <- function(
 
     ## ---------- 5. Monte-Carlo sampling per model --------------------------
     getDnUncertainty <- function(DnFun, ..., n = 1) {
-        DnModel <- DnFun(...)
-        stopifnot(all(c("muLnD", "sdLnD", "ID") %in% names(DnModel)))
-
-        # any negative, NA, or non-finite stdev -> treat as 0 (deterministic)
-        safe_sd <- ifelse(
-            !is.finite(DnModel$sdLnD) | (DnModel$sdLnD < 0),
-            0,
-            DnModel$sdLnD
-        )
-
-        if (unc_mode %in% c("dn", "both")) {
-            # ----- random draws from lognormal( muLnD, sdLnD ) -------------
-            out <- DnModel[
-                ,
-                {
-                    # vectorised approach across each row
-                    draws <- mapply(
-                        function(mu, sd) {
-                            if (sd == 0) {
-                                # purely deterministic => replicate mu
-                                rep(mu, n)
-                            } else {
-                                rnorm(n, mean = mu, sd = sd)
-                            }
-                        },
-                        muLnD,
-                        safe_sd,
-                        SIMPLIFY = FALSE
-                    )
-                    LnD <- unlist(draws, use.names = FALSE)
-                    .(ID, LnD)
-                },
-                by = .I
-            ][
-                ,
-                .(sample = seq_len(.N), ID, Dn = exp(LnD))
-            ]
-        } else {
-            # ----- "none" or "sa" => purely deterministic  -----------------
-            out <- DnModel[
-                ,
-                .(
-                    sample = seq_len(n),
-                    ID,
-                    Dn = exp(muLnD) # could be zero if muLnD == -Inf
-                ),
-                by = .I
-            ]
-        }
-
-        out
+      DnModel <- DnFun(...)
+      stopifnot(all(c("muLnD", "sdLnD", "ID") %in% names(DnModel)))
+      
+      # 1) clamp or zero out invalid standard deviations
+      safe_sd <- ifelse(
+        !is.finite(DnModel$sdLnD) | (DnModel$sdLnD < 0),
+        0,
+        DnModel$sdLnD
+      )
+      
+      if (unc_mode %in% c("dn", "both")) {
+        # ----- do random draws row-by-row ------------------------
+        out <- DnModel[
+          ,
+          {
+            # if stdev=0 OR muLnD is not finite => replicate muLnD to avoid rnorm() warnings
+            if (safe_sd[.I] == 0 || !is.finite(muLnD[.I])) {
+              LnD_vec <- rep(muLnD[.I], n)
+            } else {
+              LnD_vec <- rnorm(n, mean = muLnD[.I], sd = safe_sd[.I])
+            }
+            .(ID, LnD = LnD_vec)
+          },
+          by = .I
+        ][
+          , .(sample = seq_len(.N), ID, Dn = exp(LnD))
+        ]
+        
+      } else {
+        # ----- "none" or "sa" => deterministic --------------------
+        out <- DnModel[
+          ,
+          .(
+            sample = seq_len(n),
+            ID,
+            Dn = exp(muLnD)  # might be zero if muLnD == -Inf
+          ),
+          by = .I
+        ]
+      }
+      
+      out
     }
-
 
     DnTable <- data.table::data.table()
     add <- function(dt, new) data.table::rbindlist(list(dt, new), use.names = TRUE, fill = TRUE)

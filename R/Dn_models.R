@@ -31,16 +31,16 @@ Dn_AM88 <- function(PGA, ky) {
 Dn_YG91 <- function(PGA, ky) {
     # clamp r in (eps,1-eps)
     r <- ky / PGA
-    eps <- 1e-6
-    r <- pmax(eps, pmin(r, 1 - eps)) # clamp r in (eps,1-eps)
-    no_slide <- (ky >= PGA)
+    # eps <- 1e-6
+    # r <- pmax(eps, pmin(r, 1 - eps)) # clamp r in (eps,1-eps)
+    # no_slide <- (ky >= PGA)
 
 
     muLog10D <- 0.22 - 10.12 * r + 16.38 * r^2 - 11.48 * r^3
     sdLog10D <- 0.45
     #
-    muLog10D[no_slide] <- -Inf # => exp(-Inf)=0
-    sdLog10D[no_slide] <- 0
+    # muLog10D[no_slide] <- -Inf # => exp(-Inf)=0
+    # sdLog10D[no_slide] <- 0
 
     data.table(
         muLnD = muLog10D * log(10),
@@ -84,9 +84,9 @@ Dn_JB07 <- function(PGA, ky, AI = NULL) {
 Dn_SR08 <- function(PGA, ky, AI = NULL) {
     # clamp r in (eps,1-eps)
     r <- ky / PGA
-    eps <- 1e-6
-    r <- pmax(eps, pmin(r, 1 - eps)) # clamp r in (eps,1-eps)
-    no_slide <- (ky >= PGA)
+    # eps <- 1e-6
+    # r <- pmax(eps, pmin(r, 1 - eps)) # clamp r in (eps,1-eps)
+    # no_slide <- (ky >= PGA)
 
     #
     if (is.null(AI)) AI <- (PGA^1.9228) * exp(2.6109)
@@ -96,8 +96,8 @@ Dn_SR08 <- function(PGA, ky, AI = NULL) {
     sdLnD <- 0.46 + 0.56 * r
 
     #
-    muLog10D[no_slide] <- -Inf # => exp(-Inf)=0
-    sdLog10D[no_slide] <- 0
+    # muLnD[no_slide] <- -Inf # => exp(-Inf)=0
+    # sdLnD[no_slide] <- 0
 
     data.table(
         muLnD = muLnD,
