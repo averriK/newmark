@@ -2,7 +2,7 @@
 % Please edit documentation in R/Dn_models.R
 \name{Dn_YG91}
 \alias{Dn_YG91}
-\title{Yegian et al. (1991) rigid sliding-block model}
+\title{Yegian et al. (1991) rigid sliding-block model (patched to handle ky ≥ PGA)}
 \usage{
 Dn_YG91(PGA, ky)
 }
@@ -12,8 +12,13 @@ Dn_YG91(PGA, ky)
 \item{ky}{Yield acceleration (g).}
 }
 \value{
-data.table(muLnD, sdLnD, ID = "YG91")
+data.table with columns:
+\describe{
+\item{muLnD}{log-mean Newmark displacement (natural log \link{cm})}
+\item{sdLnD}{log-stddev Newmark displacement}
+\item{ID}{model identifier, "YG91"}
+}
 }
 \description{
-Yegian et al. (1991) rigid sliding-block model
+Yegian et al. (1991) rigid sliding-block model (patched to handle ky ≥ PGA)
 }

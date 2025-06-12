@@ -14,33 +14,49 @@
 #'   \item{X}{the random sample of length \code{n}}
 #' @export rnormQ
 rnormQ <- function(
-    n=1, 
-    meanValue, 
+    n = 1,
+    meanValue,
     p, q,
-    parameters=FALSE,
-    nuStart = 10, 
+    parameters = FALSE,
+    nuStart = 10,
     deltaD = 0.01) {
-  
-  checkInputs(meanValue, p, q)
-  OUT <- fitAllMethodsQ(
-    meanValue=meanValue, 
-    p=p, 
-    q=q,
-    nuStart = nuStart
-  )
-  agg <- aggregateSigmaQ(OUT, deltaD=deltaD)
-  sdValue <- agg$sdValue
-  
-  # fall-back: piecewise sampling
-  if (is.na(sdValue)) {
-    sdValue <- OUT$sigma[OUT$method == "6"]
-    X <- samplePiecewiseY(n, p, q, meanValue, sdValue)
-  }
-  if(!is.na(sdValue)){
-    # sdValue provided.
-    epsilon <- simulateEps(n, agg$bestMethod, OUT)
-    X <- meanValue + sdValue * epsilon
-  }
-  if(parameters==FALSE) return(X)
-  if(parameters==TRUE) return(list(X=X,muX=meanValue,sdValue=sdValue))
+    checkInputs(meanValue, p, q)
+
+    OUT <- fitAllMethodsQ(
+        meanValue = meanValue,
+        p = p,
+        q = q,
+        nuStart = nuStart
+    )
+    agg <- aggregateSigmaQ(OUT, deltaD = deltaD)
+    sdValue <- agg$sdValue
+
+    ## --------------------------------------------------------------------
+    ## 1)  If the aggregator’s “winner” is method 6 (piecewise CDF), sample
+    ##     directly from that piecewise law
+    ## --------------------------------------------------------------------
+    if (agg$bestMethod == "6") {
+        X <- samplePiecewiseY(n, p, q, meanValue, sdValue)
+        if (!parameters) {
+            return(X)
+        }
+        return(list(X = X, muX = meanValue, sdValue = sdValue))
+    }
+
+    ## --------------------------------------------------------------------
+    ## 2)  All other cases proceed exactly as before.
+    ## --------------------------------------------------------------------
+    if (is.na(sdValue)) {
+        ## fall back to pure piecewise if even σ is missing
+        sdValue <- OUT$sigma[OUT$method == "6"]
+        X <- samplePiecewiseY(n, p, q, meanValue, sdValue)
+    } else {
+        epsilon <- simulateEps(n, agg$bestMethod, OUT)
+        X <- meanValue + sdValue * epsilon
+    }
+
+    if (!parameters) {
+        return(X)
+    }
+    list(X = X, muX = meanValue, sdValue = sdValue)
 }
