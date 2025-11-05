@@ -5,7 +5,7 @@
 R package for probabilistic seismic displacement analysis of earth structures using the Newmark sliding-block method. Propagates uncertainty from uniform-hazard spectral accelerations through empirical sliding-block and non-linear site-factor models using weighted Monte-Carlo sampling.
 
 [![R Version](https://img.shields.io/badge/R-%3E%3D%204.2.0-blue)](https://www.r-project.org/)
-[![Version](https://img.shields.io/badge/version-0.4.0-green)](https://github.com/SRKConsulting/newmark)
+[![Version](https://img.shields.io/badge/version-0.4.0-green)](https://github.com/averriK/newmark)
 
 ## Contents
 
@@ -28,7 +28,7 @@ R package for probabilistic seismic displacement analysis of earth structures us
 ```r
 # Install from GitHub
 # install.packages("devtools")
-devtools::install_github("SRKConsulting/newmark")
+devtools::install_github("averriK/newmark")
 ```
 
 ## Quick Start
@@ -607,9 +607,42 @@ Baker, J.W. & Jayaram, N. (2009). Correlation of spectral acceleration values fr
 
 ---
 
+## Documentation
+
+Function documentation is available via R help system:
+
+```r
+# Main functions
+?buildGMDP    # Import hazard data
+?fitSaF       # Site amplification
+?fitDn        # Newmark displacements
+
+# Individual displacement models
+?Dn_AM88      # Ambraseys & Menu (1988)
+?Dn_YG91      # Yegian et al. (1991)
+?Dn_JB07      # Jibson (2007)
+?Dn_SR08      # Saygili & Rathje (2008)
+?Dn_BT07      # Bray & Travasarou (2007)
+?Dn_BM17      # Bray & Macedo (2017)
+?Dn_BM19      # Bray & Macedo (2019)
+
+# Utilities
+?sampleSaCorr        # Correlated spectral sampling
+?rhoBJ               # Baker & Jayaram correlation
+?buildQSpline        # Quantile function builder
+?interpolateSaTable  # Period interpolation
+```
+
+For package overview:
+```r
+?newmark
+```
+
+---
+
 ## Contributing
 
-Issues and pull requests are welcome at the [GitHub repository](https://github.com/SRKConsulting/newmark).
+Issues and pull requests are welcome at the [GitHub repository](https://github.com/averriK/newmark).
 
 ---
 
@@ -629,7 +662,7 @@ When using this package in research, please cite:
   title = {newmark: Monte-Carlo Ensemble Newmark Displacements},
   year = {2024},
   version = {0.4.0},
-  url = {https://github.com/SRKConsulting/newmark}
+  url = {https://github.com/averriK/newmark}
 }
 ```
 
