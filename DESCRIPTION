@@ -1,0 +1,37 @@
+Package: newmark
+Type: Package
+Title: Monte-Carlo Ensemble Newmark Displacements
+Version: 0.4.0
+Authors@R:
+    person(given = "Alejandro",
+           family = "Verri Kozlowski",
+           email = "averri@fi.uba.ar",
+           role = c("aut", "cre"))
+Description: Propagates uncertainty from uniform-hazard spectral
+  accelerations through empirical sliding-block and non-linear site-factor
+  models using weighted Monte-Carlo sampling.  Builder sampleSa() draws
+  Sa(Tn) realisations from hazard-curve quantiles; fitSaF() convolves those
+  values with the Stewart & Seyhan (2017) site factor; fitDn() combines
+  multiple Newmark displacement models to deliver scenario-specific
+  quantiles.  Outputs are returned as data.table objects.
+License: file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends: R (>= 4.2)
+Imports:
+    data.table,
+    Hmisc,
+    mvtnorm,
+    stats,
+    readxl,
+    stringr,
+    future,
+    future.apply,
+    devtools
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+Config/testthat/edition: 3
+NeedsCompilation: no
