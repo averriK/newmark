@@ -8,26 +8,28 @@ on:
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
+# Sets permissions for GitHub Pages deployment
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
+# Allow one concurrent deployment
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Quarto
+      - name: Setup Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Create _quarto.yml for gh-pages
+      - name: Create Quarto project configuration
         run: |
           cat > _quarto.yml << 'EOFQMD'
           project:
@@ -50,12 +52,26 @@ jobs:
             enabled: false
           EOFQMD
           
-          # Rename README.md to index.qmd for Quarto
           cp README.md index.qmd
 
-      - name: Publish to GitHub Pages
-        uses: quarto-dev/quarto-actions/publish@v2
+      - name: Render Quarto project
+        run: quarto render
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          target: gh-pages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: '_site'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
