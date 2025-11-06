@@ -41,12 +41,14 @@ jobs:
               code-fold: true
               code-tools: true
               embed-resources: false
+          execute:
+            enabled: false
           ---
           EOFQMD
           cat README.md >> index.qmd
 
       - name: Render Quarto
-        run: quarto render index.qmd
+        run: quarto render index.qmd --no-execute
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
