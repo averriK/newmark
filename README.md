@@ -657,7 +657,7 @@ See [LICENSE](LICENSE) file for details.
 When using this package in research, please cite:
 
 ```bibtex
-@misc{newmark2024,
+@software{newmark2024,
   author = {Verri Kozlowski, Alejandro},
   title = {newmark: Monte-Carlo Ensemble Newmark Displacements},
   year = {2024},
