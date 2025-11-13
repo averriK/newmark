@@ -47,8 +47,6 @@ vignettes/*.pdf
 
 # pkgdown site
 docs/
-# Allow GitHub Pages landing page
-!docs/index.md
 
 # Translation temp files
 po/*~
