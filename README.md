@@ -2,6 +2,8 @@
 
 **Monte-Carlo Ensemble Newmark Displacements**
 
+> **Last updated:** November 13, 2025
+
 R package for probabilistic seismic displacement analysis using Newmark sliding-block method with epistemic uncertainty propagation.
 
 [![R Version](https://img.shields.io/badge/R-%3E%3D%204.2.0-blue)](https://www.r-project.org/)
