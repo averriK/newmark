@@ -71,6 +71,13 @@ See function documentation via R help:
 
 Full API: `buildGMDP()`, `fitSaF()`, `fitDn()`, displacement models (7 models: AM88, YG91, JB07, SR08, BT07, BM17, BM19), `rhoBJ()`, `sampleSaCorr()`, `kmaxMC()`, `checkUHS()`, `designUHS()`, `Vs30toSID()`, `approx.spline()`
 
+### Main functions
+- buildGMDP(...): Import PSHA results (e.g., OpenQuake) and assemble hazard curves/UHS tables.
+- fitSaF(uhs, ...): Apply non-linear site amplification with spectral correlation to produce site-adjusted spectra.
+- fitDn(uhs, ...): Monte-Carlo ensemble of displacement models with epistemic weighting to obtain displacement quantiles.
+- Displacement models: Dn_AM88(), Dn_YG91(), Dn_JB07(), Dn_SR08(), Dn_BT07(), Dn_BM17(), Dn_BM19().
+- Spectral correlation utils: rhoBJ(), sampleSaCorr(); QA: checkUHS(), designUHS(); helpers: Vs30toSID(), approx.spline().
+
 ## Dependencies
 
 - R (>= 4.2)
