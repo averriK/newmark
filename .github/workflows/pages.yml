@@ -1,4 +1,4 @@
-name: Deploy README to GitHub Pages
+name: GitHub Pages
 
 on:
   push:
@@ -8,62 +8,41 @@ on:
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
-# Sets permissions for GitHub Pages deployment
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow one concurrent deployment
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Quarto
-        uses: quarto-dev/quarto-actions/setup@v2
-
-      - name: Create Quarto project configuration
+      - name: Ensure pandoc is available
         run: |
-          cat > _quarto.yml << 'EOFQMD'
-          project:
-            type: website
-            output-dir: _site
-          
-          website:
-            title: "README"
-          
-          format:
-            html:
-              theme: spacelab
-              toc: true
-              toc-depth: 4
-              number-sections: false
-              code-fold: true
-              code-tools: true
-          
-          execute:
-            enabled: false
-          EOFQMD
-          
-          cp README.md index.qmd
+          if ! command -v pandoc >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y pandoc
+          fi
 
-      - name: Render Quarto project
-        run: quarto render
+      - name: Build static site from README
+        run: |
+          mkdir -p _site
+          pandoc -s README.md -o _site/index.html
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload Pages artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '_site'
+          path: _site
 
   deploy:
     environment:
