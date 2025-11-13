@@ -60,6 +60,17 @@ DnTable <- fitDn(
 )
 ```
 
+## API overview
+
+- buildGMDP(path, IDo="GEM", engine="openquake"|"user", vref=760, TRo=...): Import hazard (zip from OpenQuake or user AEP.xlsx) and build AEP/UHS tables (plus disaggregation if available).
+- fitSaF(uhs, vs30, vref=760, ns=1000, Rrup=100): Site amplification (Stewart & Seyhan 2017) with spectral correlation; returns SaF and AF by Tn and p.
+- fitDn(uhs, ky, Ts, Mw=6.5, NS=30, Rrup=100): Ensemble Newmark displacements with epistemic weights; returns quantiles and mean.
+- Displacement models: Dn_AM88, Dn_YG91, Dn_JB07, Dn_SR08, Dn_BT07, Dn_BM17, Dn_BM19 (log-mean/log-sd on cm or ln scale per model).
+- Helpers: buildQSpline, interpolateSaTable, rhoBJ, sampleSaCorr, kmaxMC, checkUHS, designUHS.
+- Utilities: Vs30toSID, approx.spline.
+
+Note: For engine="user" in buildGMDP(), place an AEP.xlsx file under the provided path with the expected columns.
+
 ## Examples
 
 Complete workflows available in:
