@@ -2,12 +2,9 @@
 
 **Monte-Carlo Ensemble Newmark Displacements**
 
-> **Last updated:** November 13, 2025
+[![R Version](https://img.shields.io/badge/R-%3E%3D%204.2.0-blue)](https://www.r-project.org/) [![Version](https://img.shields.io/badge/version-0.4.0-green)](https://github.com/averriK/newmark)
 
 R package for probabilistic seismic displacement analysis using Newmark sliding-block method with epistemic uncertainty propagation.
-
-[![R Version](https://img.shields.io/badge/R-%3E%3D%204.2.0-blue)](https://www.r-project.org/)
-[![Version](https://img.shields.io/badge/version-0.4.0-green)](https://github.com/averriK/newmark)
 
 ## What is it?
 
@@ -20,6 +17,7 @@ newmark propagates uncertainty from uniform-hazard spectral accelerations throug
 - **Ensemble displacement models**: AM88, YG91, JB07, SR08, BT07, BM17, BM19
 - **Spectral correlation**: Baker & Jayaram (2009) for Sa(T) sampling
 - **Parallel processing**: Future-based workflows for large parameter grids
+- **Epistemic weighting**: Model uncertainty quantification
 
 ## Installation
 
@@ -60,27 +58,9 @@ DnTable <- fitDn(
 )
 ```
 
-## API overview
-
-- buildGMDP(path, IDo="GEM", engine="openquake"|"user", vref=760, TRo=...): Import hazard (zip from OpenQuake or user AEP.xlsx) and build AEP/UHS tables (plus disaggregation if available).
-- fitSaF(uhs, vs30, vref=760, ns=1000, Rrup=100): Site amplification (Stewart & Seyhan 2017) with spectral correlation; returns SaF and AF by Tn and p.
-- fitDn(uhs, ky, Ts, Mw=6.5, NS=30, Rrup=100): Ensemble Newmark displacements with epistemic weights; returns quantiles and mean.
-- Displacement models: Dn_AM88, Dn_YG91, Dn_JB07, Dn_SR08, Dn_BT07, Dn_BM17, Dn_BM19 (log-mean/log-sd on cm or ln scale per model).
-- Helpers: buildQSpline, interpolateSaTable, rhoBJ, sampleSaCorr, kmaxMC, checkUHS, designUHS.
-- Utilities: Vs30toSID, approx.spline.
-
-Note: For engine="user" in buildGMDP(), place an AEP.xlsx file under the provided path with the expected columns.
-
-## Examples
-
-Complete workflows available in:
-
-- `~/github/psha/R/runDn.R` - Displacement analysis workflow
-- `~/github/psha/R/runKmax.R` - Seismic coefficient analysis
-
 ## Documentation
 
-Function documentation available via R help:
+See function documentation via R help:
 
 ```r
 ?newmark
@@ -89,12 +69,22 @@ Function documentation available via R help:
 ?fitDn
 ```
 
+Full API: `buildGMDP()`, `fitSaF()`, `fitDn()`, displacement models (7 models: AM88, YG91, JB07, SR08, BT07, BM17, BM19), `rhoBJ()`, `sampleSaCorr()`, `kmaxMC()`, `checkUHS()`, `designUHS()`, `Vs30toSID()`, `approx.spline()`
+
 ## Dependencies
 
 - R (>= 4.2)
-- data.table, Hmisc, mvtnorm
-- future, future.apply
+- data.table, Hmisc, mvtnorm, stats
+- future, future.apply (parallel processing)
 - readxl, stringr, devtools
+
+## References
+
+Baker, J. W., & Jayaram, N. (2008). Correlation of spectral acceleration values from NGA ground motion models. *Earthquake Spectra*, 24(1), 299-317.
+
+Stewart, J. P., & Seyhan, E. (2013). Semi-empirical nonlinear site amplification and its application in NEHRP site factors. PEER Report 2013/13.
+
+Bray, J. D., & Macedo, J. (2019). Procedure for estimating shear-induced seismic slope displacement for shallow crustal earthquakes. *Journal of Geotechnical and Geoenvironmental Engineering*, 145(12), 04019106.
 
 ## License
 
