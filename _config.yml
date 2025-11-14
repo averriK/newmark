@@ -3,3 +3,16 @@ kramdown:
   math_engine: mathjax
   input: GFM
   syntax_highlighter: rouge
+
+include:
+  - README.md
+  - index.md
+
+exclude:
+  - "**/sessions"
+  - "*.sh"
+  - bin/
+  - examples/
+  - tests/
+  - src/
+  - docs/
