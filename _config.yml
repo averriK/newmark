@@ -15,4 +15,3 @@ exclude:
   - examples/
   - tests/
   - src/
-  - docs/
