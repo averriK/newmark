@@ -100,10 +100,10 @@ Custom license - see [LICENSE](LICENSE)
 ## Citation
 
 ```bibtex
-@software{newmark2024,
+@software{newmark2008,
   author = {Verri Kozlowski, Alejandro},
   title = {newmark: Monte-Carlo Ensemble Newmark Displacements},
-  year = {2024},
+  year = {2008},
   version = {0.4.0},
   url = {https://github.com/averriK/newmark}
 }
@@ -111,6 +111,9 @@ Custom license - see [LICENSE](LICENSE)
 
 ---
 
-**Author:** Alejandro Verri Kozlowski  
+## Author
+
+**Alejandro Verri Kozlowski**  
 **Email:** averri@fi.uba.ar  
-**ORCID:** [0000-0002-8535-1170](https://orcid.org/0000-0002-8535-1170)
+**ORCID:** [0000-0002-8535-1170](https://orcid.org/0000-0002-8535-1170)  
+**Affiliation:** Universidad de Buenos Aires, Facultad de Ingeniería
