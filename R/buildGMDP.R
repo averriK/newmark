@@ -45,8 +45,9 @@ buildGMDP <- function(path,
 
     message("> Re-mesh hazard data on a uniform TR grid ...")
     COLS <- setdiff(names(AEPTable), c("Sa", "POE", "AEP", "TR"))
-    # UHSTable <- AEPTable[Tn != -1, remeshGroup(.SD, TRo), by = COLS]
-  UHSTable <- AEPTable[p == "mean" & Tn != -1, remeshGroup(.SD, TRo), by = COLS]
+    # Include all output kinds (mean, std, quantiles) as separate p-levels.
+    # This ensures downstream stages can propagate non-mean curves without breaking.
+    UHSTable <- AEPTable[Tn != -1, remeshGroup(.SD, TRo, .BY), by = COLS]
 
     UHSTable[, `:=`(Vref = vref, Vs30 = vref, AF = 1, SaF = Sa)]
     UHSTable[, ID := IDo]
@@ -165,8 +166,8 @@ importModel.oqAEP <- function(path, vref) {
         )
         DATA[, POE := as.numeric(POE)]
         DATA[, Sa := as.numeric(sub("^poe-", "", Sa))]
-        DATA[, AEP := -log(1 - POE) / ITo]
-        DATA[, TR := -ITo / log(1 - POE)]
+        DATA[, AEP := poeToAep(POE, ITo)]
+        DATA[, TR := poeToTr(POE, ITo)]
         DATA[, `:=`(Tn = Tn, p = p, ITo = ITo)]
 
         DT <- data.table::rbindlist(list(DT, DATA), use.names = TRUE)
@@ -195,69 +196,72 @@ importModel.oqRMw <- function(path, ITo, vref) {
         stop("Path does not exist: ", path)
     }
 
-    tmp_dir <- file.path(path, paste0(".temp_oqRMw_", as.integer(Sys.time())))
-    if (dir.exists(tmp_dir)) {
-        unlink(tmp_dir, recursive = TRUE, force = TRUE)
+    DIR <- file.path(path, paste0(".temp_oqRMw_", as.integer(Sys.time())))
+    if (dir.exists(DIR)) {
+        unlink(DIR, recursive = TRUE, force = TRUE)
     }
-    dir.create(tmp_dir, showWarnings = FALSE)
+    dir.create(DIR, showWarnings = FALSE)
 
     FILES <- list.files(path, pattern = "\\.zip$", full.names = TRUE)
     if (length(FILES)) {
         for (.files in FILES) {
-            utils::unzip(.files, exdir = tmp_dir, junkpaths = TRUE)
+            utils::unzip(.files, exdir = DIR, junkpaths = TRUE)
         }
     }
-    search_dir <- if (length(FILES)) tmp_dir else path
+    searchDir <- if (length(FILES)) DIR else path
 
-    all_files <- list.files(search_dir, pattern = "Mag_Dist", full.names = TRUE)
-    all_files <- all_files[!grepl("TRT", all_files)]
-    if (!length(all_files)) {
-        unlink(tmp_dir, recursive = TRUE, force = TRUE)
+    FILES <- list.files(searchDir, pattern = "Mag_Dist", full.names = TRUE)
+    FILES <- FILES[!grepl("TRT", FILES)]
+    if (!length(FILES)) {
+        unlink(DIR, recursive = TRUE, force = TRUE)
         message("> No 'Mag_Dist' files found in path. Skipping...")
         return(NULL)
     }
-    mean_files <- grep("Mag_Dist-mean", all_files, value = TRUE)
-    if (length(mean_files)) {
-        all_files <- mean_files
+    meanFiles <- grep("Mag_Dist-mean", FILES, value = TRUE)
+    if (length(meanFiles)) {
+        FILES <- meanFiles
     }
 
     DHT <- data.table::data.table()
-    for (.files in all_files) {
-        meta_line <- tryCatch(readLines(.files, n = 1L), error = function(e) "")
-        dt_raw <- tryCatch(data.table::fread(.files, skip = 1, header = TRUE, blank.lines.skip = TRUE),
+    for (.files in FILES) {
+        DT <- tryCatch(
+            data.table::fread(.files, skip = 1, header = TRUE, blank.lines.skip = TRUE),
             error = function(e) NULL
         )
-        if (is.null(dt_raw) || !nrow(dt_raw)) {
+        if (is.null(DT) || !nrow(DT)) {
             next
         }
 
-        required_cols <- c("mag", "dist", "poe", "imt")
-        missing_cols <- setdiff(required_cols, names(dt_raw))
-        if (length(missing_cols)) {
+        requiredCols <- c("mag", "dist", "poe", "imt")
+        missingCols <- setdiff(requiredCols, names(DT))
+        if (length(missingCols)) {
             next
         }
 
-        data.table::setnames(dt_raw, old = c("mag", "dist", "poe"), new = c("Mw", "R", "POE"), skip_absent = TRUE)
-        if ("iml" %in% names(dt_raw)) dt_raw[, iml := NULL]
+        data.table::setnames(DT, old = c("mag", "dist", "poe"), new = c("Mw", "R", "POE"), skip_absent = TRUE)
+        if ("iml" %in% names(DT)) {
+            DT[, iml := NULL]
+        }
 
-        rlz_col <- grep("rlz|mean", names(dt_raw), value = TRUE)
-        if (length(rlz_col) == 1) {
-            data.table::setnames(dt_raw, old = rlz_col, new = "p")
+        rlzCol <- grep("rlz|mean", names(DT), value = TRUE)
+        if (length(rlzCol) == 1) {
+            data.table::setnames(DT, old = rlzCol, new = "p")
         } else {
             next
         }
 
-        dt_raw[imt == "PGA", imt := "Sa(0.0)"]
-        dt_raw[, Tn := stringr::str_extract(imt, "(?<=\\()\\d+\\.*\\d*(?=\\))")]
-        dt_raw[, Tn := as.numeric(Tn)]
-        dt_raw[is.na(Tn), Tn := 0]
-        dt_raw[, IT := ITo]
-        dt_raw[, `:=`(AEP = POE / IT, TR = 1 / (POE / IT))]
+        DT[imt == "PGA", imt := "Sa(0.0)"]
+        DT[, Tn := stringr::str_extract(imt, "(?<=\\()\\d+\\.*\\d*(?=\\))")]
+        DT[, Tn := as.numeric(Tn)]
+        DT[is.na(Tn), Tn := 0]
+        DT[, IT := ITo]
+        DT[, `:=`(AEP = poeToAep(POE, IT), TR = poeToTr(POE, IT))]
+        DT <- DT[is.finite(TR) & TR > 0 & is.finite(AEP) & AEP > 0]
 
-        DHT <- data.table::rbindlist(list(DHT, dt_raw), fill = TRUE)
+        DHT <- data.table::rbindlist(list(DHT, DT), fill = TRUE)
     }
 
-    unlink(tmp_dir, recursive = TRUE, force = TRUE)
+    unlink(DIR, recursive = TRUE, force = TRUE)
     if (!nrow(DHT)) {
         message("No valid disagg data found.")
         return(NULL)
@@ -271,6 +275,10 @@ importModel.oqRMw <- function(path, ITo, vref) {
 .extractQuantileFromHeader <- function(line) {
     if (grepl("kind='mean'", line)) {
         return("mean")
+    }
+    if (grepl("kind='std'", line)) {
+        # Standard deviation curve exported by OpenQuake
+        return("std")
     }
     mt <- regexpr("kind='quantile-([0-9\\.]+)'", line)
     if (mt > 0) {
@@ -322,62 +330,85 @@ importModel.oqRMw <- function(path, ITo, vref) {
 #' Internal: Interpolate Hazard Curve to Uniform TR Grid
 #' @keywords internal
 #' @noRd
-# ---------------------------------------------------------------------------
-#  Patched: reMeshCurve()
-#  * Same name, same 3-argument signature.
-#  * Replaces “flat-tail” fallback with log-log extrapolation, so each
-#    quantile keeps its own slope and cannot collapse into a single value.
-# ---------------------------------------------------------------------------
-reMeshCurve <- function(TRi, Sai, TRo) {
-    if (length(TRi) < 2L) {
-        stop("reMeshCurve: need at least two (TR, Sa) points for interpolation.")
+.formatRemeshContext <- function(groupBy = NULL) {
+    if (is.null(groupBy) || !length(groupBy)) {
+        return("hazard curve")
+    }
+    AUX <- vapply(names(groupBy), function(x) paste0(x, "=", as.character(groupBy[[x]])), character(1))
+    paste(AUX, collapse = ", ")
+}
+
+.prepareCurveForRemesh <- function(TRi, Sai, groupBy = NULL) {
+    DT <- data.table::data.table(TR = as.numeric(TRi), Sa = as.numeric(Sai))
+    DT <- DT[is.finite(TR) & TR > 0 & is.finite(Sa) & Sa > 0]
+    if (nrow(DT) < 2L) {
+        stop("Need at least two positive (TR, Sa) points for ", .formatRemeshContext(groupBy), ".")
     }
 
-    # Pre-compute logs once - faster and clearer
-    log_TRi <- log(TRi)
-    log_Sai <- log(Sai)
-
-    Sa_star <- numeric(length(TRo))
-
-    for (j in seq_along(TRo)) {
-        trT <- TRo[j]
-
-        # ----------------- 1.  Below first point -> extrapolate ------------------
-        if (trT <= TRi[1]) {
-            frac <- (log(trT) - log_TRi[1]) / (log_TRi[2] - log_TRi[1])
-            Sa_star[j] <- exp(log_Sai[1] + frac * (log_Sai[2] - log_Sai[1]))
-            next
+    data.table::setorder(DT, TR)
+    if (anyDuplicated(DT$TR)) {
+        AUX <- DT[, .(nSa = data.table::uniqueN(signif(Sa, 12))), by = TR]
+        if (any(AUX$nSa > 1L)) {
+            stop("Duplicate TR nodes with distinct Sa values in ", .formatRemeshContext(groupBy), ".")
         }
+        DT <- DT[, .(Sa = Sa[1]), by = TR]
+        data.table::setorder(DT, TR)
+    }
+    if (nrow(DT) < 2L) {
+        stop("Need at least two unique TR nodes for ", .formatRemeshContext(groupBy), ".")
+    }
+    DT
+}
 
-        # ----------------- 2.  Above last point -> extrapolate -------------------
-        if (trT >= TRi[length(TRi)]) {
-            n <- length(TRi)
-            frac <- (log(trT) - log_TRi[n - 1]) / (log_TRi[n] - log_TRi[n - 1])
-            Sa_star[j] <- exp(log_Sai[n - 1] + frac * (log_Sai[n] - log_Sai[n - 1]))
-            next
-        }
+.checkTrCoverage <- function(TRi, TRo, groupBy = NULL) {
+    trMin <- min(TRi)
+    trMax <- max(TRi)
+    targetMin <- min(TRo)
+    targetMax <- max(TRo)
+    tol <- max(0.5, 1e-4 * max(c(abs(TRi), abs(TRo))))
+    if (targetMin < trMin - tol || targetMax > trMax + tol) {
+        stop(
+            "Requested TR grid [", signif(targetMin, 8), ", ", signif(targetMax, 8),
+            "] exceeds imported curve range [", signif(trMin, 8), ", ", signif(trMax, 8),
+            "] for ", .formatRemeshContext(groupBy),
+            ". Expand the oqt POE grid or narrow TRo instead of extrapolating."
+        )
+    }
+    tol
+}
 
-        # ----------------- 3.  Inside the curve -> interpolate -------------------
-        if (trT %in% TRi) { # exact node
-            Sa_star[j] <- Sai[match(trT, TRi)]
-        } else { # between two nodes
-            idx_high <- which(TRi > trT)[1]
-            idx_low <- idx_high - 1
-            frac <- (log(trT) - log_TRi[idx_low]) /
-                (log_TRi[idx_high] - log_TRi[idx_low])
-            Sa_star[j] <- exp(log_Sai[idx_low] +
-                frac * (log_Sai[idx_high] - log_Sai[idx_low]))
-        }
+reMeshCurve <- function(TRi, Sai, TRo, groupBy = NULL) {
+    if (!length(TRo) || any(!is.finite(TRo) | TRo <= 0)) {
+        stop("TRo must contain finite positive return periods.")
     }
 
-    Sa_star
+    DT <- .prepareCurveForRemesh(TRi, Sai, groupBy)
+    tol <- .checkTrCoverage(DT$TR, TRo, groupBy)
+    TRfit <- TRo
+    TRfit[TRfit < min(DT$TR)] <- min(DT$TR)
+    TRfit[TRfit > max(DT$TR)] <- max(DT$TR)
+    if (any(TRo < min(DT$TR) - tol | TRo > max(DT$TR) + tol)) {
+        stop("Requested TR grid exceeds the tolerated interpolation support.")
+    }
+
+    logTarget <- stats::approx(
+        x = log(DT$TR),
+        y = log(DT$Sa),
+        xout = log(TRfit),
+        method = "linear",
+        ties = "ordered"
+    )$y
+    if (any(!is.finite(logTarget))) {
+        stop("Interpolation failed for ", .formatRemeshContext(groupBy), ".")
+    }
+    exp(logTarget)
 }
 
 
 #' Internal: Remesh a Group to Uniform TR Grid
 #' @keywords internal
 #' @noRd
-remeshGroup <- function(.SD, TRo) {
+remeshGroup <- function(.SD, TRo, groupBy = NULL) {
     if (!all(c("TR", "Sa") %in% colnames(.SD))) {
         stop("'.SD' must contain columns 'TR' and 'Sa'.")
     }
@@ -390,8 +421,8 @@ remeshGroup <- function(.SD, TRo) {
 
     TRi <- .SD$TR
     Sai <- .SD$Sa
-    Sa_star <- reMeshCurve(TRi, Sai, TRo)
-    data.table(TR = TRo, Sa = Sa_star)
+    SaStar <- reMeshCurve(TRi, Sai, TRo, groupBy)
+    data.table(TR = TRo, Sa = SaStar)
 }
 
 #' Internal: Remesh a Group to Uniform TR Grid
@@ -402,35 +433,34 @@ importModel.userAEP <- function(path = NULL, filename = "AEP.xlsx") {
         stop("Invalid `path`: must be a directory.")
     }
 
-    file_xlsx <- file.path(path, filename)
-    if (!file.exists(file_xlsx)) {
-        stop("File not found: ", file_xlsx)
+    inputFile <- file.path(path, filename)
+    if (!file.exists(inputFile)) {
+        stop("File not found: ", inputFile)
     }
 
-    sheets_all <- readxl::excel_sheets(file_xlsx)
-    sheets_p <- grep(pattern = "^p=", sheets_all, value = TRUE)
-    if (length(sheets_p) == 0) {
-        stop("No sheets named 'p=...' found in: ", file_xlsx)
+    sheetsAll <- readxl::excel_sheets(inputFile)
+    sheetsP <- grep(pattern = "^p=", sheetsAll, value = TRUE)
+    if (length(sheetsP) == 0) {
+        stop("No sheets named 'p=...' found in: ", inputFile)
     }
 
     AT <- data.table()
-    for (SHEET in sheets_p) {
-        dt_sheet <- data.table::as.data.table(readxl::read_xlsx(file_xlsx, sheet = SHEET))
-        if (!("Tn" %in% names(dt_sheet))) {
+    for (SHEET in sheetsP) {
+        DT <- data.table::as.data.table(readxl::read_xlsx(inputFile, sheet = SHEET))
+        if (!("Tn" %in% names(DT))) {
             stop("Missing column 'Tn' in sheet '", SHEET, "'.")
         }
-
-        id_var <- "Tn"
-        measure_vars <- setdiff(names(dt_sheet), id_var)
-        if (length(measure_vars) == 0) {
+        idVar <- "Tn"
+        measureVars <- setdiff(names(DT), idVar)
+        if (length(measureVars) == 0) {
             warning("No measure columns in sheet '", SHEET, "'. Skipping.")
             next
         }
 
         aux <- melt(
-            dt_sheet,
-            id.vars = id_var,
-            measure.vars = measure_vars,
+            DT,
+            id.vars = idVar,
+            measure.vars = measureVars,
             variable.name = "Sa",
             value.name = "AEP",
             variable.factor = FALSE
@@ -439,9 +469,9 @@ importModel.userAEP <- function(path = NULL, filename = "AEP.xlsx") {
 
         po <- stringr::str_remove(SHEET, "p=")
         if (po != "mean") {
-            po_num <- suppressWarnings(as.numeric(po))
-            if (!is.na(po_num)) {
-                po <- po_num
+            poNum <- suppressWarnings(as.numeric(po))
+            if (!is.na(poNum)) {
+                po <- poNum
             }
         }
 
@@ -452,15 +482,15 @@ importModel.userAEP <- function(path = NULL, filename = "AEP.xlsx") {
 
         aux[, p := po]
         aux[, IT := 50]
-        aux[, POE := 1 - exp(-IT * AEP)]
-        aux[, TR := 1 / AEP]
+        aux[, POE := aepToPoe(AEP, IT)]
+        aux[, TR := aepToTr(AEP)]
 
         AT <- rbind(AT, aux, use.names = TRUE, fill = TRUE)
     }
 
-    col_order <- c("Tn", "Sa", "AEP", "p", "POE", "TR", "IT")
-    col_order <- intersect(col_order, names(AT))
-    setcolorder(AT, col_order)
+    colOrder <- c("Tn", "Sa", "AEP", "p", "POE", "TR", "IT")
+    colOrder <- intersect(colOrder, names(AT))
+    setcolorder(AT, colOrder)
 
     return(AT[])
 }
