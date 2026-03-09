@@ -347,11 +347,14 @@ importModel.oqRMw <- function(path, ITo, vref) {
 
     data.table::setorder(DT, TR)
     if (anyDuplicated(DT$TR)) {
-        AUX <- DT[, .(nSa = data.table::uniqueN(signif(Sa, 12))), by = TR]
+        AUX <- DT[, .(
+            Sa = max(Sa),
+            nSa = data.table::uniqueN(signif(Sa, 12))
+        ), by = TR]
         if (any(AUX$nSa > 1L)) {
-            stop("Duplicate TR nodes with distinct Sa values in ", .formatRemeshContext(groupBy), ".")
+            message(">> Collapsing duplicate TR nodes by keeping max Sa in ", .formatRemeshContext(groupBy), ".")
         }
-        DT <- DT[, .(Sa = Sa[1]), by = TR]
+        DT <- AUX[, .(TR, Sa)]
         data.table::setorder(DT, TR)
     }
     if (nrow(DT) < 2L) {
