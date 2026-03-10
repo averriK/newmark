@@ -9,7 +9,7 @@ buildGMDP(
   IDo = "GEM",
   engine = "openquake",
   vref = 760,
-  TRo = c(475, 975, 1975, 2475, 4975, 9975)
+  TRo = c(100, 200, 500, 1000, 2000, 2500, 5000, 10000)
 )
 }
 \arguments{
